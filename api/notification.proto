@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+option go_package = "pkg/api";
+
+package api;
+
+service NotificationService {
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
+}
+
+message Notification {
+  int32 id = 1;
+  int32 status = 2;
+  string text = 3;
+  string mail = 4;
+}
+
+message SendNotificationRequest {
+  string text = 1;
+  string mail = 2;
+}
+
+message SendNotificationResponse {
+  int32 id =1;
+}
+
