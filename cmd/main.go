@@ -16,21 +16,21 @@ func main() {
 	//	TODO: graceful shutdown
 	//	TODO: goroutines?
 
-	logger := logger.New()
+	l := logger.New()
 
 	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
-		logger.Fatal("failed to listen", zap.Error(err))
+		l.Fatal("failed to listen", zap.Error(err))
 	}
 
 	srv := service.New()
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.UnaryInterceptor(logger.Interceptor(l)))
 	api.RegisterNotificationServiceServer(server, srv)
 
 	//go func() {
-	logger.Info(fmt.Sprintf("listening on port 50051"))
+	l.Info(fmt.Sprintf("listening on port 50051"))
 	if err := server.Serve(lis); err != nil {
-		logger.Fatal("failed to serve", zap.Error(err))
+		l.Fatal("failed to serve", zap.Error(err))
 	}
 	//}()
 

@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
-	"go.uber.org/zap"
+	"fmt"
+	"github.com/google/uuid"
 	"notification/pkg/api"
-	"notification/pkg/logger"
 )
 
 type Service struct {
@@ -16,7 +16,9 @@ func New() *Service {
 }
 
 func (s *Service) SendNotification(ctx context.Context, request *api.SendNotificationRequest) (*api.SendNotificationResponse, error) {
-	logger.New().Info("", zap.String("mail", request.Mail), zap.String("text", request.Text))
+	id := uuid.New().String()
+	fmt.Println(id)
+
 	return &api.SendNotificationResponse{
 		Id: 123,
 	}, nil
