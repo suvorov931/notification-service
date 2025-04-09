@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -9,12 +10,13 @@ import (
 	"notification/internal/service"
 	"notification/pkg/api"
 	"notification/pkg/logger"
+	"os"
+	"os/signal"
 )
 
 func main() {
-	//	TODO: graceful shutdown
-	//  TODO: timeout and retry
-	//	TODO: goroutines?
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 
 	l := logger.New()
 
@@ -31,16 +33,20 @@ func main() {
 	srv := service.New(cfg, l)
 	interceptor := grpc.UnaryInterceptor(logger.Interceptor(l))
 	s := grpc.NewServer(interceptor)
+
 	api.RegisterNotificationServiceServer(s, srv)
 
-	//go func() {
-	l.Info(fmt.Sprintf("listening on port 50051"))
-	if err := s.Serve(lis); err != nil {
-		l.Fatal("failed to serve", zap.Error(err))
-	}
-	//}()
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			l.Fatal("failed to serve", zap.Error(err))
+		}
+	}()
 
-	//if err := sendMessage.SendMessage(cfg, l, "daanisimov04@gmail.com", "hi", "hello"); err != nil {
-	//	l.Fatal("failed to send message", zap.Error(err))
-	//}
+	l.Info(fmt.Sprintf("server started"))
+
+	select {
+	case <-ctx.Done():
+		s.GracefulStop()
+		l.Info("server stopped")
+	}
 }

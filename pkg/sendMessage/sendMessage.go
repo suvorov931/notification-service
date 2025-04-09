@@ -5,6 +5,12 @@ import (
 	"go.uber.org/zap"
 	"gopkg.in/gomail.v2"
 	"notification/internal/config"
+	"time"
+)
+
+const (
+	maxRetries      = 3
+	basicRetryPause = 5 * time.Second
 )
 
 func SendMessage(cfg *config.Config, logger *zap.Logger, to string, subject string, message string) error {
@@ -17,7 +23,18 @@ func SendMessage(cfg *config.Config, logger *zap.Logger, to string, subject stri
 
 	dialer := gomail.NewDialer("smtp.mail.ru", 587, cfg.SenderEmail, cfg.SenderPassword)
 
-	if err := dialer.DialAndSend(msg); err != nil {
+	err := dialer.DialAndSend(msg)
+	if err != nil {
+		for i := 0; i < maxRetries; i++ {
+			time.Sleep(basicRetryPause)
+
+			err = dialer.DialAndSend(msg)
+			if err == nil {
+				logger.Info("Successfully sent message")
+				return nil
+			}
+		}
+
 		logger.Error(cannotSendMessage(to, err))
 		return fmt.Errorf(cannotSendMessage(to, err))
 	}
