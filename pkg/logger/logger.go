@@ -22,8 +22,10 @@ func Interceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		next grpc.UnaryHandler,
 	) (resp any, err error) {
+
 		logger.Info(
-			"request", zap.String("method", info.FullMethod),
+			"new request", zap.String("method", info.FullMethod),
+			zap.Any("request", req),
 			zap.Time("time", time.Now()),
 		)
 

@@ -9,10 +9,9 @@ service NotificationService {
 }
 
 message Notification {
-  int32 id = 1;
-  int32 status = 2;
-  string text = 3;
-  string mail = 4;
+  string id = 1;
+  string text = 2;
+  string mail = 3;
 }
 
 message SendNotificationRequest {
@@ -21,6 +20,6 @@ message SendNotificationRequest {
 }
 
 message SendNotificationResponse {
-  int32 id =1;
+  string id =1;
 }
 
