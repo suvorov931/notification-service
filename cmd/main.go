@@ -25,7 +25,7 @@ func main() {
 		l.Fatal("failed to read config", zap.Error(err))
 	}
 
-	lis, err := net.Listen("tcp", "0.0.0.0:50051")
+	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.GrpcPort))
 	if err != nil {
 		l.Fatal("failed to listen", zap.Error(err))
 	}
