@@ -15,8 +15,9 @@ message Notification {
 }
 
 message SendNotificationRequest {
-  string text = 1;
-  string mail = 2;
+  string subject =1;
+  string text = 2;
+  string mail = 3;
 }
 
 message SendNotificationResponse {
