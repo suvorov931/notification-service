@@ -1,1 +1,1 @@
-# notification-service
+# notification-server

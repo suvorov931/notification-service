@@ -1,32 +1,41 @@
-package sendMessage
+package service
 
 import (
 	"fmt"
+	"math"
+	"time"
+
 	"go.uber.org/zap"
 	"gopkg.in/gomail.v2"
+
 	"notification/internal/config"
-	"time"
 )
 
 const (
 	maxRetries      = 3
-	basicRetryPause = 5 * time.Second
+	basicRetryPause = 5
 )
 
-func SendMessage(cfg *config.Config, logger *zap.Logger, to string, subject string, message string) error {
+func (s *Service) SendMessage(cfg *config.Config, logger *zap.Logger, to string, subject string, message string) error {
 	msg := gomail.NewMessage()
 
-	msg.SetHeader("From", cfg.SenderEmail)
+	msg.SetHeader("From", cfg.SendMail.SenderEmail)
 	msg.SetHeader("To", to)
 	msg.SetHeader("Subject", subject)
 	msg.SetBody("text/plain", message)
 
-	dialer := gomail.NewDialer("smtp.mail.ru", 587, cfg.SenderEmail, cfg.SenderPassword)
+	dialer := gomail.NewDialer(
+		"smtp.mail.ru",
+		587,
+		cfg.SendMail.SenderEmail,
+		cfg.SendMail.SenderPassword,
+	)
 
 	err := dialer.DialAndSend(msg)
 	if err != nil {
 		for i := 0; i < maxRetries; i++ {
-			time.Sleep(basicRetryPause)
+			pause := math.Pow(2, float64(i)) + basicRetryPause
+			time.Sleep(time.Duration(pause) * time.Second)
 
 			err = dialer.DialAndSend(msg)
 			if err == nil {

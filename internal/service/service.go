@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
+
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+
+	"notification/internal/api"
 	"notification/internal/config"
-	"notification/pkg/api"
-	"notification/pkg/sendMessage"
 )
 
 type Service struct {
@@ -24,7 +25,7 @@ func New(config *config.Config, logger *zap.Logger) *Service {
 }
 
 func (s *Service) SendNotification(ctx context.Context, request *api.SendNotificationRequest) (*api.SendNotificationResponse, error) {
-	err := sendMessage.SendMessage(s.config, s.logger, request.Mail, request.Subject, request.Text)
+	err := s.SendMessage(s.config, s.logger, request.Mail, request.Subject, request.Text)
 	if err != nil {
 		return nil, fmt.Errorf("SendNotification: failed to send message: %w", err)
 	}
