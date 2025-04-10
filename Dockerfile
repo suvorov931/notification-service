@@ -1,8 +1,20 @@
-FROM archlinux:base-devel
+FROM golang:1.24-alpine AS build
 
 WORKDIR /app
 
-COPY cmd/cmd /app/cmd/
-COPY config/config.yaml /app/config/
+COPY go.mod go.sum ./
+RUN go mod download
 
-ENTRYPOINT [ "./cmd/cmd" ]
+COPY . .
+RUN go build -o notificationservice cmd/*.go
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app/
+
+COPY --from=build /app/notificationservice .
+COPY /config /app/config
+
+CMD ["./notificationservice"]
