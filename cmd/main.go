@@ -19,7 +19,6 @@ import (
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-
 	l := logger.New()
 
 	cfg, err := config.New()

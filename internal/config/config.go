@@ -8,10 +8,10 @@ import (
 
 type Config struct {
 	NotificationsGrpcPort int               `yaml:"NOTIFICATIONS_GRPC_PORT" env:"NOTIFICATIONS_GRPC_PORT" env-default:"50051"`
-	SendMail              ConfigForSendMail `yaml:"SEND_MAIL" env:"SEND_MAIL"`
+	SendMail              CredentialsSender `yaml:"CREDENTIALS_SENDER" env:"CREDENTIALS_SENDER"`
 }
 
-type ConfigForSendMail struct {
+type CredentialsSender struct {
 	SenderEmail    string `yaml:"SENDER_EMAIL" env:"SENDER_EMAIL"`
 	SenderPassword string `yaml:"SENDER_PASSWORD" env:"SENDER_PASSWORD"`
 }
