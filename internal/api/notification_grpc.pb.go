@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: api/notification.proto
+// source: google/notification.proto
 
 package api
 
@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NotificationService_SendNotification_FullMethodName = "/api.NotificationService/SendNotification"
+	NotificationService_SendNotification_FullMethodName = "/google.NotificationService/SendNotification"
 )
 
 // NotificationServiceClient is the client API for NotificationService service.
@@ -108,7 +108,7 @@ func _NotificationService_SendNotification_Handler(srv interface{}, ctx context.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NotificationService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.NotificationService",
+	ServiceName: "google.NotificationService",
 	HandlerType: (*NotificationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -117,5 +117,5 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "api/notification.proto",
+	Metadata: "google/notification.proto",
 }

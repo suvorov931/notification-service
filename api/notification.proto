@@ -1,11 +1,18 @@
 syntax = "proto3";
 
-option go_package = "pkg/api";
+option go_package = "internal/api";
+
+import "api/google/api/annotations.proto";
 
 package api;
 
 service NotificationService {
-  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse){
+    option (google.api.http) = {
+      post: "/api/notifications"
+      body: "*"
+    };
+  };
 }
 
 message Notification {

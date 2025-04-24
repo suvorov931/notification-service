@@ -2,9 +2,10 @@ package logger
 
 import (
 	"context"
+	"time"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"time"
 )
 
 func New() *zap.Logger {

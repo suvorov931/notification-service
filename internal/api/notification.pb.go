@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.5
 // 	protoc        v5.29.3
-// source: api/notification.proto
+// source: google/notification.proto
 
 package api
 
@@ -227,13 +227,13 @@ func file_api_notification_proto_rawDescGZIP() []byte {
 
 var file_api_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_api_notification_proto_goTypes = []any{
-	(*Notification)(nil),             // 0: api.Notification
-	(*SendNotificationRequest)(nil),  // 1: api.SendNotificationRequest
-	(*SendNotificationResponse)(nil), // 2: api.SendNotificationResponse
+	(*Notification)(nil),             // 0: google.Notification
+	(*SendNotificationRequest)(nil),  // 1: google.SendNotificationRequest
+	(*SendNotificationResponse)(nil), // 2: google.SendNotificationResponse
 }
 var file_api_notification_proto_depIdxs = []int32{
-	1, // 0: api.NotificationService.SendNotification:input_type -> api.SendNotificationRequest
-	2, // 1: api.NotificationService.SendNotification:output_type -> api.SendNotificationResponse
+	1, // 0: google.NotificationService.SendNotification:input_type -> google.SendNotificationRequest
+	2, // 1: google.NotificationService.SendNotification:output_type -> google.SendNotificationResponse
 	1, // [1:2] is the sub-list for method output_type
 	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
