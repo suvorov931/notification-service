@@ -7,13 +7,11 @@
 package api
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	_ "google.golang.org/genproto/googleapis/api/annotations"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -191,7 +189,7 @@ var File_api_notification_proto protoreflect.FileDescriptor
 
 const file_api_notification_proto_rawDesc = "" +
 	"\n" +
-	"\x16api/notification.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\"F\n" +
+	"\x16api/notification.proto\x12\x03api\"F\n" +
 	"\fNotification\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
@@ -201,9 +199,9 @@ const file_api_notification_proto_rawDesc = "" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
 	"\x04mail\x18\x03 \x01(\tR\x04mail\"*\n" +
 	"\x18SendNotificationResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id2\x85\x01\n" +
-	"\x13NotificationService\x12n\n" +
-	"\x10SendNotification\x12\x1c.api.SendNotificationRequest\x1a\x1d.api.SendNotificationResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/notificationsB\x0eZ\finternal/apib\x06proto3"
+	"\x02id\x18\x01 \x01(\tR\x02id2f\n" +
+	"\x13NotificationService\x12O\n" +
+	"\x10SendNotification\x12\x1c.api.SendNotificationRequest\x1a\x1d.api.SendNotificationResponseB\tZ\apkg/apib\x06proto3"
 
 var (
 	file_api_notification_proto_rawDescOnce sync.Once

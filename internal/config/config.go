@@ -7,8 +7,7 @@ import (
 )
 
 type Config struct {
-	NotificationsGrpcPort int               `yaml:"NOTIFICATIONS_GRPC_PORT" env:"NOTIFICATIONS_GRPC_PORT" env-default:"50051"`
-	NotificationsRestPort int               `yaml:"NOTIFICATIONS_REST_PORT" env:"NOTIFICATIONS_REST_PORT" env-default:"8080"`
+	NotificationsGRPCPort int               `yaml:"NOTIFICATIONS_GRPC_PORT" env:"NOTIFICATIONS_GRPC_PORT" env-default:"8080"`
 	SendMail              CredentialsSender `yaml:"CREDENTIALS_SENDER" env:"CREDENTIALS_SENDER"`
 }
 

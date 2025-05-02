@@ -2,17 +2,10 @@ syntax = "proto3";
 
 option go_package = "internal/api";
 
-import "google/api/annotations.proto";
-
 package api;
 
 service NotificationService {
-  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse){
-    option (google.api.http) = {
-      post: "/api/notifications"
-      body: "*"
-    };
-  };
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
 }
 
 message Notification {
@@ -30,4 +23,3 @@ message SendNotificationRequest {
 message SendNotificationResponse {
   string id =1;
 }
-

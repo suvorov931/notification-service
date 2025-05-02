@@ -14,6 +14,11 @@ import (
 	"notification/internal/config"
 )
 
+const (
+	maxRetries      = 3
+	basicRetryPause = 5
+)
+
 type Service struct {
 	api.NotificationServiceServer
 	config *config.Config
@@ -26,11 +31,6 @@ func New(config *config.Config, logger *zap.Logger) *Service {
 		logger: logger,
 	}
 }
-
-const (
-	maxRetries      = 3
-	basicRetryPause = 5
-)
 
 func (s *Service) sendMessage(to string, subject string, message string) error {
 	msg := gomail.NewMessage()
