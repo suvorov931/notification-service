@@ -1,54 +1,50 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"net"
-	"os"
-	"os/signal"
+	"log"
+	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 
-	"notification/internal/api"
 	"notification/internal/config"
 	"notification/internal/logger"
-	"notification/internal/service"
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	l := logger.New()
-	defer l.Sync()
-
 	cfg, err := config.New()
 	if err != nil {
-		l.Fatal("failed to read config", zap.Error(err))
+		log.Fatalf("cannot initialize config: %v", err)
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.NotificationsGRPCPort))
+	l, err := logger.New(&cfg.Logger)
 	if err != nil {
-		l.Fatal("failed to listen", zap.Error(err))
+		log.Fatalf("cannot initialize logger: %v", err)
 	}
-
-	srv := service.New(cfg, l)
-	interceptor := grpc.UnaryInterceptor(logger.Interceptor(l))
-	server := grpc.NewServer(interceptor)
-
-	api.RegisterNotificationServiceServer(server, srv)
-
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			l.Fatal("failed to serve", zap.Error(err))
+	defer func() {
+		if err := l.Sync(); err != nil {
+			log.Fatalf("failed to sync logger: %v", err)
 		}
 	}()
 
-	l.Info(fmt.Sprintf("server started"))
+	router := chi.NewRouter()
 
-	select {
-	case <-ctx.Done():
-		server.GracefulStop()
-		l.Info("server stopped")
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RealIP)
+	router.Use(logger.MiddlewareLogger(l))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+	router.Post("/", func(w http.ResponseWriter, r *http.Request) {})
+
+	srv := http.Server{
+		Addr:    cfg.HttpServer.Addr,
+		Handler: router,
+	}
+
+	l.Info("starting http server", zap.String("addr:", cfg.HttpServer.Addr))
+	if err := srv.ListenAndServe(); err != nil {
+		l.Fatal("cannot start http server", zap.Error(err))
 	}
 }

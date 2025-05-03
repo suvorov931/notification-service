@@ -4,16 +4,27 @@ import (
 	"fmt"
 
 	"github.com/ilyakaznacheev/cleanenv"
+
+	"notification/internal/logger"
+	"notification/internal/rds"
 )
 
 type Config struct {
-	NotificationsGRPCPort int               `yaml:"NOTIFICATIONS_GRPC_PORT" env:"NOTIFICATIONS_GRPC_PORT" env-default:"8080"`
-	SendMail              CredentialsSender `yaml:"CREDENTIALS_SENDER" env:"CREDENTIALS_SENDER"`
+	HttpServer        HttpServer        `yaml:"HTTP_SERVER" env:"HTTP_SERVER"`
+	CredentialsSender CredentialsSender `yaml:"CREDENTIALS_SENDER" env:"CREDENTIALS_SENDER"`
+	Redis             rds.Config        `yaml:"REDIS" env:"REDIS"`
+	Logger            logger.Config     `yaml:"LOGGER" env:"LOGGER"`
+}
+
+type HttpServer struct {
+	Addr string `yaml:"HTTP_ADDR" env:"HTTP_ADDR"`
 }
 
 type CredentialsSender struct {
 	SenderEmail    string `yaml:"SENDER_EMAIL" env:"SENDER_EMAIL"`
 	SenderPassword string `yaml:"SENDER_PASSWORD" env:"SENDER_PASSWORD"`
+	SMTPHost       string `yaml:"SMTP_HOST" env:"SMTP_HOST"`
+	SMTPPORT       int    `yaml:"SMTP_PORT" env:"SMTP_PORT"`
 }
 
 func New() (*Config, error) {
