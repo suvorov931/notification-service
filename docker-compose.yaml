@@ -1,0 +1,13 @@
+name: notification-service
+
+services:
+  redis:
+    container_name: redis
+    image: redis:latest
+#    env_file:
+#      - config/config.yaml
+    command:
+      - redis-server
+      - --requirepass 1234
+    ports:
+      - "6379:6379"
