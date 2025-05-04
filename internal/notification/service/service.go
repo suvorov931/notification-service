@@ -1,6 +1,7 @@
-package mail
+package service
 
 import (
+	"crypto/tls"
 	"fmt"
 	"math"
 	"time"
@@ -24,19 +25,20 @@ func (s *MailService) SendMessage(mail Mail) error {
 
 	dialer := gomail.NewDialer(
 		s.config.CredentialsSender.SMTPHost,
-		s.config.CredentialsSender.SMTPPORT,
+		s.config.CredentialsSender.SMTPPort,
 		s.config.CredentialsSender.SenderEmail,
 		s.config.CredentialsSender.SenderPassword,
 	)
 
+	dialer.TLSConfig = &tls.Config{ServerName: "smtp.mail.ru"}
 	s.logger.Info(fmt.Sprintf("Send message: sending email to %s", mail.To))
 
 	if err := s.sendWithRetry(dialer, msg); err != nil {
-		s.logger.Error(fmt.Sprintf("send message: cannot send message to %s", mail.To), zap.Error(err))
-		return fmt.Errorf("send message: cannot send message to %s, %w", mail.To, err)
+		s.logger.Error(fmt.Sprintf("SendMessage: cannot send message to %s", mail.To), zap.Error(err))
+		return fmt.Errorf("sendMessage: cannot send message to %s, %w", mail.To, err)
 	}
 
-	s.logger.Info(fmt.Sprintf("Send message: successfully sent message to %s", mail.To))
+	s.logger.Info(fmt.Sprintf("SendMessage: successfully sent message to %s", mail.To))
 	return nil
 }
 
@@ -47,7 +49,7 @@ func (s *MailService) sendWithRetry(dialer *gomail.Dialer, msg *gomail.Message) 
 		if i > 0 {
 			pause := time.Duration(basicRetryPause*math.Pow(2, float64(i-1))) * time.Second
 			s.logger.Info(
-				"Send message: retrying send message",
+				"SendMessage: retrying send message",
 				zap.Int("attempt", i),
 				zap.Duration("pause", pause),
 				zap.Error(lastErr),
@@ -63,6 +65,6 @@ func (s *MailService) sendWithRetry(dialer *gomail.Dialer, msg *gomail.Message) 
 		return nil
 	}
 
-	s.logger.Error("Send message: all attempts to send message failed", zap.Error(lastErr))
-	return fmt.Errorf("all attempts to send message failed, %w", lastErr)
+	s.logger.Error("SendMessage: all attempts to send message failed", zap.Error(lastErr))
+	return fmt.Errorf("sendMessage: all attempts to send message failed, %w", lastErr)
 }

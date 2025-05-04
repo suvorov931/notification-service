@@ -1,4 +1,4 @@
-package api
+package decoder
 
 import (
 	"encoding/json"
@@ -9,10 +9,10 @@ import (
 
 	"go.uber.org/zap"
 
-	"notification/internal/notification/mail"
+	"notification/internal/notification/service"
 )
 
-func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*mail.Mail, error) {
+func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Mail, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
 		l.Error(fmt.Sprintf("decodeMailRequest: header: %s is not a application/json", r.Header))
@@ -23,7 +23,7 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
-	var mail mail.Mail
+	var mail service.Mail
 
 	err := dec.Decode(&mail)
 	if err != nil {

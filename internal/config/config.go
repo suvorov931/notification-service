@@ -17,14 +17,15 @@ type Config struct {
 }
 
 type HttpServer struct {
-	Addr string `yaml:"HTTP_ADDR" env:"HTTP_ADDR"`
+	Host string `yaml:"HTTP_HOST" env:"HTTP_HOST"`
+	Port string `yaml:"HTTP_PORT" env:"HTTP_PORT"`
 }
 
 type CredentialsSender struct {
 	SenderEmail    string `yaml:"SENDER_EMAIL" env:"SENDER_EMAIL"`
 	SenderPassword string `yaml:"SENDER_PASSWORD" env:"SENDER_PASSWORD"`
 	SMTPHost       string `yaml:"SMTP_HOST" env:"SMTP_HOST"`
-	SMTPPORT       int    `yaml:"SMTP_PORT" env:"SMTP_PORT"`
+	SMTPPort       int    `yaml:"SMTP_PORT" env:"SMTP_PORT"`
 }
 
 func New() (*Config, error) {

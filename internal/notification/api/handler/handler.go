@@ -5,13 +5,13 @@ import (
 
 	"go.uber.org/zap"
 
-	"notification/internal/notification/api"
-	"notification/internal/notification/mail"
+	"notification/internal/notification/api/decoder"
+	"notification/internal/notification/service"
 )
 
-func NewSendNotificationHandler(l *zap.Logger, sender mail.MailSender) http.HandlerFunc {
+func NewSendNotificationHandler(l *zap.Logger, sender service.MailSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		mail, err := api.DecodeMailRequest(w, r, l)
+		mail, err := decoder.DecodeMailRequest(w, r, l)
 		if err != nil {
 			return
 		}
