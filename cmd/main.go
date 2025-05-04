@@ -54,8 +54,8 @@ func main() {
 	}
 }
 
-// // TODO: реализовать функцию для отправки сообщений через время
-// // TODO: localhost:8080/sending-via-time/...json data...
-// // TODO: json data: sending time, notification.Mail{}
-//
-// // TODO: если на той стороне прервали функцию прервалась и у меня
+// TODO: реализовать функцию для отправки сообщений через время
+// TODO: localhost:8080/sending-via-time/...json data...
+// TODO: json data: sending time, Mail{}
+// TODO: сделать првоерку на корректность названия полей при запросе
+// TODO: если на той стороне прервался запрос, прервалось и у меня

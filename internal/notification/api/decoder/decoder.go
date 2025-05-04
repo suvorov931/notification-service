@@ -15,7 +15,7 @@ import (
 func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Mail, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
-		l.Error(fmt.Sprintf("decodeMailRequest: header: %s is not a application/json", r.Header))
+		l.Error(fmt.Sprintf("DecodeMailRequest: header: %s is not a application/json", r.Header))
 		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
 		return nil, fmt.Errorf(`Content-Type must be "application/json" or "application/json"`)
 	}
@@ -33,7 +33,7 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 		switch {
 		case errors.As(err, &syntaxError):
 			msg := fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
-			l.Error("decodeMailRequest:" + (msg))
+			l.Error("DecodeMailRequest:" + (msg))
 			http.Error(w, msg, http.StatusBadRequest)
 
 		case errors.As(err, &unmarshalTypeError):
@@ -42,16 +42,16 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 				unmarshalTypeError.Field,
 				unmarshalTypeError.Offset,
 			)
-			l.Error("decodeMailRequest:" + msg)
+			l.Error("DecodeMailRequest:" + msg)
 			http.Error(w, msg, http.StatusBadRequest)
 
 		case errors.Is(err, io.EOF):
 			msg := "Request body must not be empty"
-			l.Error("decodeMailRequest:" + msg)
+			l.Error("DecodeMailRequest:" + msg)
 			http.Error(w, msg, http.StatusBadRequest)
 
 		default:
-			l.Error("decodeMailRequest: unknown error", zap.Error(err))
+			l.Error("DecodeMailRequest: unknown error", zap.Error(err))
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 		}
 	}

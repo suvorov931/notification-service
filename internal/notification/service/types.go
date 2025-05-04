@@ -7,9 +7,9 @@ import (
 )
 
 type Mail struct {
-	To      string
-	Subject string
-	Message string
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Message string `json:"message"`
 }
 
 type MailService struct {

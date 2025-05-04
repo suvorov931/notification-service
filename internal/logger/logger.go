@@ -33,11 +33,13 @@ func New(cfg *Config) (*zap.Logger, error) {
 		}
 
 		return logger, nil
+
 	default:
 		logger, err := zap.NewProduction()
 		if err != nil {
 			return nil, fmt.Errorf("can't initialize logger: %w", err)
 		}
+
 		return logger, nil
 	}
 }
