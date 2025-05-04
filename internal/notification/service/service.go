@@ -1,4 +1,4 @@
-package notification
+package mail
 
 import (
 	"fmt"
@@ -7,36 +7,12 @@ import (
 
 	"go.uber.org/zap"
 	"gopkg.in/gomail.v2"
-
-	"notification/internal/config"
 )
 
 const (
 	maxRetries      = 3
 	basicRetryPause = 5
 )
-
-type Mail struct {
-	To      string
-	Subject string
-	Message string
-}
-
-type MailService struct {
-	config *config.Config
-	logger *zap.Logger
-}
-
-func New(config *config.Config, logger *zap.Logger) *MailService {
-	return &MailService{
-		config: config,
-		logger: logger,
-	}
-}
-
-type MailSender interface {
-	SendMessage(mail Mail) error
-}
 
 func (s *MailService) SendMessage(mail Mail) error {
 	msg := gomail.NewMessage()
