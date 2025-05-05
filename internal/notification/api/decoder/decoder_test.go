@@ -1,11 +1,11 @@
 package decoder
 
 import (
-	"bytes"
 	"errors"
-	"net/http"
+	"fmt"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -17,35 +17,47 @@ func TestDecoder(t *testing.T) {
 	tests := []struct {
 		name    string
 		mail    string
-		want    service.Mail
+		want    *service.Mail
 		wantErr error
 	}{
 		{
 			name: "success decoding",
 			mail: `{
-				"to": "To", 
-				"subject": "Subject", 
+				"to": "To",
+				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: service.Mail{
+			want: &service.Mail{
 				To:      "To",
 				Subject: "Subject",
 				Message: "Message",
 			},
 			wantErr: nil,
 		},
+		{
+			name: "two fields",
+			mail: `{
+				"Subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrNotAllFields,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest("POST", "/", bytes.NewBufferString(tt.mail))
-			w := &mockResponseWriter{headers: make(http.Header)}
-			got, err := DecodeMailRequest(w, r, zap.NewNop())
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.mail))
+			r.Header.Set("Content-Type", "application/json")
 
-			if errors.Is(err, tt.wantErr) {
+			got, err := DecodeMailRequest(w, r, zap.NewNop())
+			fmt.Println(got)
+			fmt.Println(err)
+
+			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("DecodeMailRequest(): error = %v, wantErr %v", err, tt.wantErr)
 			}
-
-			if !reflect.DeepEqual(got, tt.want) {
+			if !reflect.DeepEqual(tt.want, got) {
 				t.Errorf("DecodeMailRequest(): got = %v, want %v", got, tt.want)
 			}
 		})

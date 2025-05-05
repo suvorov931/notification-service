@@ -16,7 +16,10 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.MailSender) http.H
 			return
 		}
 
-		w.Write([]byte("Message is correct,\nStarting to send notification\n\n"))
+		_, err = w.Write([]byte("Message is correct,\nStarting to send notification\n\n"))
+		if err != nil {
+			l.Warn("cannot send report to caller", zap.Error(err))
+		}
 
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()

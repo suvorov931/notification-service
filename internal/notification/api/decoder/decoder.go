@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,65 +12,71 @@ import (
 	"notification/internal/notification/service"
 )
 
-type mockResponseWriter struct {
-	headers    http.Header
-	statusCode int
-	body       bytes.Buffer
-}
-
-func (m *mockResponseWriter) Header() http.Header {
-	return m.headers
-}
-
-func (m *mockResponseWriter) Write(data []byte) (int, error) {
-	return m.body.Write(data)
-}
-
-func (m *mockResponseWriter) WriteHeader(statusCode int) {
-	m.statusCode = statusCode
-}
+var (
+	ErrNotAllFields  = errors.New("DecodeMailRequest: Request body have not all fields filled in")
+	ErrHeaderNotJSON = errors.New("DecodeMailRequest: Header is not a application/json")
+	ErrSyntaxError   = errors.New("DecodeMailRequest: Request body contains badly-formed JSON")
+	ErrInvalidType   = errors.New("DecodeMailRequest: Request body contains an invalid value type")
+	ErrEmptyBody     = errors.New("DecodeMailRequest: Request body must not be empty")
+	ErrUnknownError  = errors.New("DecodeMailRequest: Unknown error")
+)
 
 func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Mail, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
-		l.Error(fmt.Sprintf("DecodeMailRequest: header: %s is not a application/json", r.Header))
+		l.Error(ErrHeaderNotJSON.Error())
 		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
-		return nil, fmt.Errorf(`Content-Type must be "application/json" or "application/json"`)
-	}
 
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
+		return nil, ErrHeaderNotJSON
+	}
 
 	var mail service.Mail
 
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
 	err := dec.Decode(&mail)
+
+	if mail.To == "" || mail.Message == "" || mail.Subject == "" {
+		l.Error(ErrNotAllFields.Error())
+		http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
+
+		return nil, ErrNotAllFields
+	}
+
 	if err != nil {
 		var syntaxError *json.SyntaxError
 		var unmarshalTypeError *json.UnmarshalTypeError
 
 		switch {
 		case errors.As(err, &syntaxError):
-			msg := fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
-			l.Error("DecodeMailRequest:" + (msg))
-			http.Error(w, msg, http.StatusBadRequest)
+			l.Error(ErrSyntaxError.Error())
+			http.Error(w,
+				fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset),
+				http.StatusBadRequest)
+
+			return nil, ErrSyntaxError
 
 		case errors.As(err, &unmarshalTypeError):
-			msg := fmt.Sprintf(
-				"Request body contains an invalid value for the %q field (at position %d)",
-				unmarshalTypeError.Field,
-				unmarshalTypeError.Offset,
-			)
-			l.Error("DecodeMailRequest:" + msg)
-			http.Error(w, msg, http.StatusBadRequest)
+			l.Error(ErrInvalidType.Error())
+			http.Error(w,
+				fmt.Sprintf(
+					"Request body contains an invalid value for the %q field (at position %d)",
+					unmarshalTypeError.Field, unmarshalTypeError.Offset),
+				http.StatusBadRequest)
+
+			return nil, ErrInvalidType
 
 		case errors.Is(err, io.EOF):
-			msg := "Request body must not be empty"
-			l.Error("DecodeMailRequest:" + msg)
-			http.Error(w, msg, http.StatusBadRequest)
+			l.Error(ErrEmptyBody.Error())
+			http.Error(w, "Request body must not be empty", http.StatusBadRequest)
+
+			return nil, ErrEmptyBody
 
 		default:
-			l.Error("DecodeMailRequest: unknown error", zap.Error(err))
+			l.Error(ErrUnknownError.Error())
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+
+			return nil, ErrUnknownError
 		}
 	}
 
