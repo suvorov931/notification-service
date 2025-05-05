@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -30,12 +29,20 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 		return nil, ErrHeaderNotJSON
 	}
 
+	rBytes := []byte{}
+	_, err := r.Body.Read(rBytes)
+	if err != nil {
+		l.Error(ErrEmptyBody.Error())
+		http.Error(w, "Request body must not be empty", http.StatusBadRequest)
+
+		return nil, ErrEmptyBody
+	}
+
 	var mail service.Mail
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	err := dec.Decode(&mail)
-
+	err = dec.Decode(&mail)
 	if mail.To == "" || mail.Message == "" || mail.Subject == "" {
 		l.Error(ErrNotAllFields.Error())
 		http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
@@ -65,12 +72,6 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 				http.StatusBadRequest)
 
 			return nil, ErrInvalidType
-
-		case errors.Is(err, io.EOF):
-			l.Error(ErrEmptyBody.Error())
-			http.Error(w, "Request body must not be empty", http.StatusBadRequest)
-
-			return nil, ErrEmptyBody
 
 		default:
 			l.Error(ErrUnknownError.Error())

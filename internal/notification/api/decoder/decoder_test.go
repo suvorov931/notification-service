@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"errors"
-	"fmt"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -43,6 +42,12 @@ func TestDecoder(t *testing.T) {
 			want:    nil,
 			wantErr: ErrNotAllFields,
 		},
+		{
+			name:    "empty body",
+			mail:    ``,
+			want:    nil,
+			wantErr: ErrEmptyBody,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -51,8 +56,8 @@ func TestDecoder(t *testing.T) {
 			r.Header.Set("Content-Type", "application/json")
 
 			got, err := DecodeMailRequest(w, r, zap.NewNop())
-			fmt.Println(got)
-			fmt.Println(err)
+			//fmt.Println(got)
+			//fmt.Println(err)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("DecodeMailRequest(): error = %v, wantErr %v", err, tt.wantErr)
