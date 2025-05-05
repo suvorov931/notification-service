@@ -1,34 +1,53 @@
 package decoder
 
-//import (
-//	"io"
-//	"net/http/httptest"
-//	"testing"
-//
-//	"github.com/go-jose/go-jose/v4/json"
-//
-//	"notification/internal/notification/service"
-//)
-//
-//func DecoderTest(t *testing.T) {
-//	tests := []struct {
-//		name    string
-//		mail    []byte
-//		want    service.Mail
-//		wantErr error
-//	}{
-//		{
-//			name:    "success decoding",
-//			mail:    []byte(`{"to": "john@example.com"},""`),
-//			want:    service.Mail{},
-//			wantErr: nil,
-//		},
-//	}
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			m, _ := io.ReadAll(tt.mail)
-//			r := httptest.NewRequest("post", "/", m)
-//			DecodeMailRequest()
-//		})
-//	}
-//}
+import (
+	"bytes"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"testing"
+
+	"go.uber.org/zap"
+
+	"notification/internal/notification/service"
+)
+
+func TestDecoder(t *testing.T) {
+	tests := []struct {
+		name    string
+		mail    string
+		want    service.Mail
+		wantErr error
+	}{
+		{
+			name: "success decoding",
+			mail: `{
+				"to": "To", 
+				"subject": "Subject", 
+				"message": "Message"
+			}`,
+			want: service.Mail{
+				To:      "To",
+				Subject: "Subject",
+				Message: "Message",
+			},
+			wantErr: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("POST", "/", bytes.NewBufferString(tt.mail))
+			w := &mockResponseWriter{headers: make(http.Header)}
+			got, err := DecodeMailRequest(w, r, zap.NewNop())
+
+			if errors.Is(err, tt.wantErr) {
+				t.Errorf("DecodeMailRequest(): error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("DecodeMailRequest(): got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

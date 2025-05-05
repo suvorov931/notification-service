@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,24 @@ import (
 
 	"notification/internal/notification/service"
 )
+
+type mockResponseWriter struct {
+	headers    http.Header
+	statusCode int
+	body       bytes.Buffer
+}
+
+func (m *mockResponseWriter) Header() http.Header {
+	return m.headers
+}
+
+func (m *mockResponseWriter) Write(data []byte) (int, error) {
+	return m.body.Write(data)
+}
+
+func (m *mockResponseWriter) WriteHeader(statusCode int) {
+	m.statusCode = statusCode
+}
 
 func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Mail, error) {
 	ct := r.Header.Get("Content-Type")
