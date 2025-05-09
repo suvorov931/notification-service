@@ -8,6 +8,11 @@ import (
 	"notification/internal/config"
 )
 
+const (
+	maxRetries      = 3
+	basicRetryPause = 5
+)
+
 type Mail struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`

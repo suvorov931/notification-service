@@ -11,11 +11,6 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-const (
-	maxRetries      = 3
-	basicRetryPause = 5
-)
-
 func (s *MailService) SendMessage(ctx context.Context, mail Mail) error {
 	select {
 	case <-ctx.Done():

@@ -17,7 +17,7 @@ import (
 
 	"notification/internal/config"
 	"notification/internal/logger"
-	"notification/internal/notification/api/handler"
+	"notification/internal/notification/api/handlers"
 	"notification/internal/notification/service"
 )
 
@@ -50,7 +50,7 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/", handler.NewSendNotificationHandler(l, s))
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(l, s))
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),

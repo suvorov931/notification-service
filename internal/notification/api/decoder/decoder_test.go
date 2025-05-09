@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"errors"
-	"fmt"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -117,16 +116,28 @@ func TestDecoder(t *testing.T) {
 			want:    nil,
 			wantErr: ErrSyntaxError,
 		},
+		{
+			name:        "unknown error",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			mail: `{
+				"to": "to",
+				"subject": "subject", 
+				"message": "message", 
+				"": "empty field"
+			}`,
+			want:    nil,
+			wantErr: ErrUnknownError,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.mail))
+
 			r.Header.Set(tt.headerKey, tt.headerValue)
 
 			got, err := DecodeMailRequest(w, r, zap.NewNop())
-			fmt.Println("got:", got)
-			fmt.Println("err:", err)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("DecodeMailRequest(): error = %v, wantErr %v", err, tt.wantErr)

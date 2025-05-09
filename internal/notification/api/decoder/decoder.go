@@ -1,9 +1,11 @@
 package decoder
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -12,7 +14,7 @@ import (
 )
 
 var (
-	ErrNotAllFields  = errors.New("DecodeMailRequest: Request body have not all fields filled in")
+	ErrNotAllFields  = errors.New("DecodeMailRequest: Request body not all required fields are filled")
 	ErrHeaderNotJSON = errors.New("DecodeMailRequest: Header is not a application/json")
 	ErrSyntaxError   = errors.New("DecodeMailRequest: Request body contains badly-formed JSON")
 	ErrInvalidType   = errors.New("DecodeMailRequest: Request body contains an invalid value type")
@@ -29,28 +31,21 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 		return nil, ErrHeaderNotJSON
 	}
 
-	rBytes := []byte{}
-	_, err := r.Body.Read(rBytes)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		l.Error(ErrEmptyBody.Error())
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+
+		return nil, ErrEmptyBody
+	}
+	if len(body) == 0 {
 		l.Error(ErrEmptyBody.Error())
 		http.Error(w, "Request body must not be empty", http.StatusBadRequest)
 
 		return nil, ErrEmptyBody
 	}
 
-	if err != nil {
-		l.Error("DecodeMailRequest: cannot read request body", zap.Error(err))
-		http.Error(w, "cannot read request body", http.StatusBadRequest)
-
-		return nil, ErrUnknownError
-	}
-
-	//if bodyBytes == nil {
-	//	l.Error(ErrEmptyBody.Error())
-	//	http.Error(w, "Request body must not be empty", http.StatusBadRequest)
-	//
-	//	return nil, ErrEmptyBody
-	//}
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	var mail service.Mail
 
