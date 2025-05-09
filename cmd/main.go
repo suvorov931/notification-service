@@ -80,7 +80,6 @@ func main() {
 	l.Info("stopping http server", zap.String("addr", srv.Addr))
 }
 
-// TODO: graceful shutdown который доотправляет сообщения и graceful shutdown для самого сервера os.interrupt
 // TODO: реализовать функцию для отправки сообщений через время
 // TODO: localhost:8080/sending-via-time/...json data...
 // TODO: json data: sending time, Mail{}

@@ -15,14 +15,17 @@ import (
 
 func TestDecoder(t *testing.T) {
 	tests := []struct {
-		name    string
-		mail    string
-		want    *service.Mail
-		wantErr error
+		name        string
+		headerKey   string
+		headerValue string
+		mail        string
+		want        *service.Mail
+		wantErr     error
 	}{
 		{
-			name: "success decoding",
-			//header: "application/json",
+			name:        "success decoding",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
 			mail: `{
 				"to": "To",
 				"subject": "Subject",
@@ -36,7 +39,9 @@ func TestDecoder(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "two fields",
+			name:        "two fields",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
 			mail: `{
 				"Subject": "Subject",
 				"message": "Message"
@@ -45,33 +50,88 @@ func TestDecoder(t *testing.T) {
 			wantErr: ErrNotAllFields,
 		},
 		{
-			name:    "empty body",
-			mail:    ``,
-			want:    nil,
-			wantErr: ErrEmptyBody,
+			name:        "empty body",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			mail:        ``,
+			want:        nil,
+			wantErr:     ErrEmptyBody,
 		},
 		{
-			name: "two fields",
-			mail: "to: To" +
-				"subject: Subject" +
-				"message: Message",
+			name:        "non json header",
+			headerKey:   "Content-Type",
+			headerValue: "text/plain",
+			mail: `{
+				"to": "To",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
 			want:    nil,
-			wantErr: ErrNotAllFields,
+			wantErr: ErrHeaderNotJSON,
+		},
+		{
+			name:        "non content-type header",
+			headerKey:   "",
+			headerValue: "application/json",
+			mail: `{
+				"to": "To",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrHeaderNotJSON,
+		},
+		{
+			name:        "empty header",
+			headerKey:   "",
+			headerValue: "",
+			mail: `{
+				"to": "To",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrHeaderNotJSON,
+		},
+		{
+			name:        "invalid type",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			mail: `{
+				"to": 1.23,
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrInvalidType,
+		},
+		{
+			name:        "wrong syntax",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			mail: `{
+				to: "To",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrSyntaxError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.mail))
-			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set(tt.headerKey, tt.headerValue)
 
 			got, err := DecodeMailRequest(w, r, zap.NewNop())
-			fmt.Println(got)
-			fmt.Println(err)
+			fmt.Println("got:", got)
+			fmt.Println("err:", err)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("DecodeMailRequest(): error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			if !reflect.DeepEqual(tt.want, got) {
 				t.Errorf("DecodeMailRequest(): got = %v, want %v", got, tt.want)
 			}

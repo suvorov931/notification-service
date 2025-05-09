@@ -38,17 +38,25 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 		return nil, ErrEmptyBody
 	}
 
+	if err != nil {
+		l.Error("DecodeMailRequest: cannot read request body", zap.Error(err))
+		http.Error(w, "cannot read request body", http.StatusBadRequest)
+
+		return nil, ErrUnknownError
+	}
+
+	//if bodyBytes == nil {
+	//	l.Error(ErrEmptyBody.Error())
+	//	http.Error(w, "Request body must not be empty", http.StatusBadRequest)
+	//
+	//	return nil, ErrEmptyBody
+	//}
+
 	var mail service.Mail
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	err = dec.Decode(&mail)
-	if mail.To == "" || mail.Message == "" || mail.Subject == "" {
-		l.Error(ErrNotAllFields.Error())
-		http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
-
-		return nil, ErrNotAllFields
-	}
 
 	if err != nil {
 		var syntaxError *json.SyntaxError
@@ -79,6 +87,12 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 
 			return nil, ErrUnknownError
 		}
+	}
+	if mail.To == "" || mail.Message == "" || mail.Subject == "" {
+		l.Error(ErrNotAllFields.Error())
+		http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
+
+		return nil, ErrNotAllFields
 	}
 
 	return &mail, nil
