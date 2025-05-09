@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -11,6 +13,8 @@ import (
 
 func NewSendNotificationHandler(l *zap.Logger, sender service.MailSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		mail, err := decoder.DecodeMailRequest(w, r, l)
 		if err != nil {
 			return
@@ -18,20 +22,30 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.MailSender) http.H
 
 		_, err = w.Write([]byte("Message is correct,\nStarting to send notification\n\n"))
 		if err != nil {
-			l.Warn("cannot send report to caller", zap.Error(err))
+			l.Warn("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
 		}
 
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		} else {
-			l.Warn("ResponseWriter does not support flushing")
+			l.Warn("NewSendNotificationHandler: ResponseWriter does not support flushing")
 		}
 
-		if err = sender.SendMessage(*mail); err != nil {
+		err = sender.SendMessage(ctx, *mail)
+		if err != nil {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				l.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))
+				return
+			}
+
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			l.Error("SendNotification: cannot send notification", zap.Error(err))
+			l.Error("NewSendNotificationHandler: Cannot send notification", zap.Error(err))
 			return
 		}
-		w.Write([]byte("Successfully sent notification\n"))
+
+		if _, err = w.Write([]byte("Successfully sent notification\n")); err != nil {
+			l.Warn("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
+		}
 	}
+
 }

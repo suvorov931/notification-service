@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"math"
@@ -15,7 +16,13 @@ const (
 	basicRetryPause = 5
 )
 
-func (s *MailService) SendMessage(mail Mail) error {
+func (s *MailService) SendMessage(ctx context.Context, mail Mail) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("SendMessage: context canceled: %w", ctx.Err())
+	default:
+	}
+
 	msg := gomail.NewMessage()
 
 	msg.SetHeader("From", s.config.CredentialsSender.SenderEmail)
@@ -30,10 +37,14 @@ func (s *MailService) SendMessage(mail Mail) error {
 		s.config.CredentialsSender.SenderPassword,
 	)
 
-	dialer.TLSConfig = &tls.Config{ServerName: "smtp.mail.ru"}
-	s.logger.Info(fmt.Sprintf("Send message: sending email to %s", mail.To))
+	dialer.TLSConfig = &tls.Config{
+		ServerName:         s.config.CredentialsSender.SMTPHost,
+		InsecureSkipVerify: false,
+	}
 
-	if err := s.sendWithRetry(dialer, msg); err != nil {
+	s.logger.Info(fmt.Sprintf("SendMessage: sending email to %s", mail.To))
+
+	if err := s.sendWithRetry(ctx, dialer, msg); err != nil {
 		s.logger.Error(fmt.Sprintf("SendMessage: cannot send message to %s", mail.To), zap.Error(err))
 		return fmt.Errorf("sendMessage: cannot send message to %s, %w", mail.To, err)
 	}
@@ -42,10 +53,16 @@ func (s *MailService) SendMessage(mail Mail) error {
 	return nil
 }
 
-func (s *MailService) sendWithRetry(dialer *gomail.Dialer, msg *gomail.Message) error {
+func (s *MailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, msg *gomail.Message) error {
 	var lastErr error
 
 	for i := 0; i < maxRetries+1; i++ {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("SendMessage: context canceled: %w", ctx.Err())
+		default:
+		}
+
 		if i > 0 {
 			pause := time.Duration(basicRetryPause*math.Pow(2, float64(i-1))) * time.Second
 			s.logger.Info(
@@ -54,7 +71,11 @@ func (s *MailService) sendWithRetry(dialer *gomail.Dialer, msg *gomail.Message) 
 				zap.Duration("pause", pause),
 				zap.Error(lastErr),
 			)
-			time.Sleep(pause)
+			select {
+			case <-time.After(pause):
+			case <-ctx.Done():
+				return fmt.Errorf("SendMessage: context canceled: %w", ctx.Err())
+			}
 		}
 
 		if err := dialer.DialAndSend(msg); err != nil {

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+
 	"go.uber.org/zap"
 
 	"notification/internal/config"
@@ -18,7 +20,7 @@ type MailService struct {
 }
 
 type MailSender interface {
-	SendMessage(mail Mail) error
+	SendMessage(ctx context.Context, mail Mail) error
 }
 
 func New(config *config.Config, logger *zap.Logger) *MailService {
