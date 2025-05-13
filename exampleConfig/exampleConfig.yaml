@@ -16,7 +16,7 @@ REDIS:
   REDIS_PASSWORD:
   REDIS_DB:
   REDIS_USERNAME:
-# выберите какого видла будет логгер в вашем сервисе: dev = development, prod = production
+# выберите какого вида будет логгер в вашем сервисе: dev = development, prod = production
 # в production логгере используется классический zap.NewProduction
 LOGGER:
   env: dev/prod
