@@ -43,7 +43,7 @@ Successfully sent notification
 ### Отправка письма
 
 ```bash
-curl -X POST http://localhost:8080/send-notification \                            ─╯
+curl -X POST http://localhost:8080/send-notification \                       
 -H "Content-Type: application/json" \
 -d '{
     "to":"yourmail@gmail.com",
