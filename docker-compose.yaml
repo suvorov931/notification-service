@@ -1,15 +1,10 @@
 name: notification-service
 
 services:
-#  redis:
-#    container_name: redis
-#    image: redis:latest
-##    env_file:
-##      - config/config.yaml
-#    command:
-#      - redis-server
-#      - --requirepass 1234
-#    ports:
-#      - "6379:6379"
-  mail-hog:
-    container_name: mail-hog
+  notification-service:
+    container_name: notification-service
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - "8080:8080"
