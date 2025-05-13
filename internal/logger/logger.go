@@ -50,13 +50,13 @@ func MiddlewareLogger(logger *zap.Logger) func(http.Handler) http.Handler {
 			entry := logger.With(
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
-				zap.String("remote_addr", r.RemoteAddr),
-				zap.String("user_agent", r.UserAgent()),
-				zap.String("request_id", middleware.GetReqID(r.Context())),
-				zap.Time("time", time.Now()),
+				//zap.String("remote_addr", r.RemoteAddr),
+				//zap.String("user_agent", r.UserAgent()),
+				//zap.String("request_id", middleware.GetReqID(r.Context())),
+				//zap.Time("time", time.Now()),
 			)
 
-			start := time.Now()
+			//start := time.Now()
 			entry.Info("new request")
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
@@ -64,7 +64,7 @@ func MiddlewareLogger(logger *zap.Logger) func(http.Handler) http.Handler {
 				entry.Info(
 					"request completed",
 					zap.Int("status", ww.Status()),
-					zap.Duration("duration", time.Since(start)),
+					//zap.Duration("duration", time.Since(start)),
 				)
 			}()
 

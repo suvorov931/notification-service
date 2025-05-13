@@ -38,7 +38,7 @@ Successfully sent notification
 
 ## Примеры cURL
 
-### Создание обратной связи
+### Отправка письма
 
 ```bash
 curl -X POST http://localhost:8080/send-notification \                            ─╯
@@ -51,5 +51,5 @@ curl -X POST http://localhost:8080/send-notification \                          
 ```
 
 Сервис был написан на REST API, в его разработке использовался роутер chi
-Также было применены exponential retry во время отправки сообщений,
+Также были применены exponential retry во время отправки сообщений,
 2 graceful shutdown: в серверной и клиентской частях. 
