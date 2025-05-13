@@ -1,0 +1,22 @@
+# конфигурация вашего сервера
+HTTP_SERVER:
+  HTTP_HOST: your host
+  HTTP_PORT: your port
+# информация о пользователе "отправителя", с его почты сервис будет отправлять письма клиентам
+# в графе "SENDER_PASSWORD" нужно указать пароль для приложений, его можно найти на сайте почты, которую вы хотите привязать к сервису
+# также нужно указать порт и хост почтового сервиса отправителя SMTP_HOST и SMTP_PORT, вы без проблем найдете эту информацию в интернете
+CREDENTIALS_SENDER:
+  SENDER_EMAIL: your@mail.ru
+  SENDER_PASSWORD: passwordForApplicationsFromYourMail
+  SMTP_HOST: smtp.mail.ru
+  SMTP_PORT: 587
+#  в разработке
+REDIS:
+  REDIS_ADDR:
+  REDIS_PASSWORD:
+  REDIS_DB:
+  REDIS_USERNAME:
+# выберите какого видла будет логгер в вашем сервисе: dev = development, prod = production
+# в production логгере используется классический zap.NewProduction
+LOGGER:
+  env: dev/prod
