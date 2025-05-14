@@ -20,20 +20,20 @@ func (s *MailService) SendMessage(ctx context.Context, mail Mail) error {
 
 	msg := gomail.NewMessage()
 
-	msg.SetHeader("From", s.config.CredentialsSender.SenderEmail)
+	msg.SetHeader("From", s.config.SenderEmail)
 	msg.SetHeader("To", mail.To)
 	msg.SetHeader("Subject", mail.Subject)
 	msg.SetBody("text/plain", mail.Message)
 
 	dialer := gomail.NewDialer(
-		s.config.CredentialsSender.SMTPHost,
-		s.config.CredentialsSender.SMTPPort,
-		s.config.CredentialsSender.SenderEmail,
-		s.config.CredentialsSender.SenderPassword,
+		s.config.SMTPHost,
+		s.config.SMTPPort,
+		s.config.SenderEmail,
+		s.config.SenderPassword,
 	)
 
 	dialer.TLSConfig = &tls.Config{
-		ServerName:         s.config.CredentialsSender.SMTPHost,
+		ServerName:         s.config.SMTPHost,
 		InsecureSkipVerify: false,
 	}
 

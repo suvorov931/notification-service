@@ -20,7 +20,7 @@ type Mail struct {
 }
 
 type MailService struct {
-	config *config.Config
+	config *config.CredentialsSender
 	logger *zap.Logger
 }
 
@@ -28,7 +28,7 @@ type MailSender interface {
 	SendMessage(ctx context.Context, mail Mail) error
 }
 
-func New(config *config.Config, logger *zap.Logger) *MailService {
+func New(config *config.CredentialsSender, logger *zap.Logger) *MailService {
 	return &MailService{
 		config: config,
 		logger: logger,

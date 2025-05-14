@@ -44,28 +44,50 @@ func New(cfg *Config) (*zap.Logger, error) {
 	}
 }
 
-func MiddlewareLogger(logger *zap.Logger) func(http.Handler) http.Handler {
+func MiddlewareLogger(logger *zap.Logger, cfg *Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			entry := logger.With(
-				zap.String("method", r.Method),
-				zap.String("path", r.URL.Path),
-				zap.String("remote_addr", r.RemoteAddr),
-				zap.String("user_agent", r.UserAgent()),
-				zap.String("request_id", middleware.GetReqID(r.Context())),
-				zap.Time("time", time.Now()),
-			)
-
+			entry := logger.With()
 			start := time.Now()
-			entry.Info("new request")
+
+			switch cfg.Env {
+			case "dev":
+				entry = logger.With(
+					zap.String("method", r.Method),
+					zap.String("path", r.URL.Path),
+				)
+
+				entry.Info("new request")
+
+			default:
+				entry = logger.With(
+					zap.String("method", r.Method),
+					zap.String("path", r.URL.Path),
+					zap.String("remote_addr", r.RemoteAddr),
+					zap.String("user_agent", r.UserAgent()),
+					zap.String("request_id", middleware.GetReqID(r.Context())),
+					zap.Time("time", time.Now()),
+				)
+
+				entry.Info("new request")
+			}
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
 			defer func() {
-				entry.Info(
-					"request completed",
-					zap.Int("status", ww.Status()),
-					zap.Duration("duration", time.Since(start)),
-				)
+				switch cfg.Env {
+				case "dev":
+					entry.Info(
+						"request completed",
+						zap.Int("status", ww.Status()),
+					)
+
+				default:
+					entry.Info(
+						"request completed",
+						zap.Int("status", ww.Status()),
+						zap.Duration("duration", time.Since(start)),
+					)
+				}
 			}()
 
 			next.ServeHTTP(ww, r)

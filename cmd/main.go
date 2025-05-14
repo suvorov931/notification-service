@@ -40,13 +40,13 @@ func main() {
 	}
 	defer l.Sync()
 
-	s := service.New(cfg, l)
+	s := service.New(&cfg.CredentialsSender, l)
 
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(logger.MiddlewareLogger(l))
+	router.Use(logger.MiddlewareLogger(l, &cfg.Logger))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
