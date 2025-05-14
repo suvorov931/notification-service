@@ -83,7 +83,6 @@ func main() {
 // TODO: реализовать функцию для отправки сообщений через время
 // TODO: localhost:8080/sending-via-time/...json data...
 // TODO: json data: sending time, Mail{}
-// TODO: сделать првоерку на корректность названия полей при запросе
 
 //curl -X POST http://localhost:8080/ -H "Content-Type: application/json" \
 //-d '{
