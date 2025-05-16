@@ -28,8 +28,6 @@ import (
 // TODO: добавить кастомных внятных ошибок и проверить их
 
 func TestSendMessage(t *testing.T) {
-	//ctx := context.Background()
-
 	ctx, cancel := signal.NotifyContext(context.Background(),
 		os.Interrupt,
 		syscall.SIGTERM,
@@ -40,9 +38,9 @@ func TestSendMessage(t *testing.T) {
 	container := upMailHog(ctx, t)
 	go func() {
 		<-ctx.Done()
-		downMailHog(ctx, container, t)
+		downMailHog(container, t)
 	}()
-	defer downMailHog(ctx, container, t)
+	defer downMailHog(container, t)
 
 	port, httpPort, url := getMailHogPorts(ctx, container, t)
 
@@ -199,7 +197,7 @@ func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
 	return container
 }
 
-func downMailHog(ctx context.Context, container testcontainers.Container, t *testing.T) {
+func downMailHog(container testcontainers.Container, t *testing.T) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
