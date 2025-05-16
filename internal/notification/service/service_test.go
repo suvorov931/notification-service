@@ -31,21 +31,23 @@ func TestSendMessage(t *testing.T) {
 	container := upMailHog(ctx, t)
 	defer downMailHog(ctx, container, t)
 
-	stmpPort, err := container.MappedPort(ctx, "1025/tcp")
-	if err != nil {
-		t.Errorf("cannot get  mapped port: %v", err)
-	}
+	//stmpPort, err := container.MappedPort(ctx, "1025/tcp")
+	//if err != nil {
+	//	t.Errorf("cannot get  mapped port: %v", err)
+	//}
+	//
+	//httpPort, err := container.MappedPort(ctx, "8025/tcp")
+	//if err != nil {
+	//	t.Errorf("cannot get http port: %v", err)
+	//}
+	//url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
+	//
+	//port, err := strconv.Atoi(stmpPort.Port())
+	//if err != nil {
+	//	t.Errorf("cannot convert mapped port: %v", err)
+	//}
 
-	httpPort, err := container.MappedPort(ctx, "8025/tcp")
-	if err != nil {
-		t.Errorf("cannot get http port: %v", err)
-	}
-	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
-
-	port, err := strconv.Atoi(stmpPort.Port())
-	if err != nil {
-		t.Errorf("cannot convert mapped port: %v", err)
-	}
+	port, httpPort, url := getMailHogPorts(ctx, container, t)
 
 	tests := []struct {
 		name     string
@@ -109,9 +111,30 @@ func TestSendMessage(t *testing.T) {
 				t.Errorf("SendMessage() gotMessage = %v, want %v", gotMessage, tt.wantMail.Message)
 			}
 
-			cleanMailHog(httpPort.Port(), t)
+			cleanMailHog(httpPort, t)
 		})
 	}
+}
+
+func getMailHogPorts(ctx context.Context, container testcontainers.Container, t *testing.T) (int, string, string) {
+	stmpPort, err := container.MappedPort(ctx, "1025/tcp")
+	if err != nil {
+		t.Errorf("cannot get  mapped port: %v", err)
+	}
+
+	httpPort, err := container.MappedPort(ctx, "8025/tcp")
+	if err != nil {
+		t.Errorf("cannot get http port: %v", err)
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
+
+	port, err := strconv.Atoi(stmpPort.Port())
+	if err != nil {
+		t.Errorf("cannot convert mapped port: %v", err)
+	}
+
+	return port, httpPort.Port(), url
 }
 
 func parseMailHogResponse(url string, t *testing.T) mailHogResponse {
