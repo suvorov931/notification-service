@@ -8,8 +8,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"reflect"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -26,26 +28,21 @@ import (
 // TODO: добавить кастомных внятных ошибок и проверить их
 
 func TestSendMessage(t *testing.T) {
-	ctx := context.Background()
+	//ctx := context.Background()
+
+	ctx, cancel := signal.NotifyContext(context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	defer cancel()
 
 	container := upMailHog(ctx, t)
+	go func() {
+		<-ctx.Done()
+		downMailHog(ctx, container, t)
+	}()
 	defer downMailHog(ctx, container, t)
-
-	//stmpPort, err := container.MappedPort(ctx, "1025/tcp")
-	//if err != nil {
-	//	t.Errorf("cannot get  mapped port: %v", err)
-	//}
-	//
-	//httpPort, err := container.MappedPort(ctx, "8025/tcp")
-	//if err != nil {
-	//	t.Errorf("cannot get http port: %v", err)
-	//}
-	//url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
-	//
-	//port, err := strconv.Atoi(stmpPort.Port())
-	//if err != nil {
-	//	t.Errorf("cannot convert mapped port: %v", err)
-	//}
 
 	port, httpPort, url := getMailHogPorts(ctx, container, t)
 
@@ -116,52 +113,6 @@ func TestSendMessage(t *testing.T) {
 	}
 }
 
-func getMailHogPorts(ctx context.Context, container testcontainers.Container, t *testing.T) (int, string, string) {
-	stmpPort, err := container.MappedPort(ctx, "1025/tcp")
-	if err != nil {
-		t.Errorf("cannot get  mapped port: %v", err)
-	}
-
-	httpPort, err := container.MappedPort(ctx, "8025/tcp")
-	if err != nil {
-		t.Errorf("cannot get http port: %v", err)
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
-
-	port, err := strconv.Atoi(stmpPort.Port())
-	if err != nil {
-		t.Errorf("cannot convert mapped port: %v", err)
-	}
-
-	return port, httpPort.Port(), url
-}
-
-func parseMailHogResponse(url string, t *testing.T) mailHogResponse {
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Errorf("Cannot get response: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Cannot read body: %v", err)
-	}
-
-	got := mailHogResponse{}
-	if err = json.Unmarshal(body, &got); err != nil {
-		t.Errorf("Cannot unmarshal body: %v", err)
-	}
-
-	if got.Total == 0 {
-		t.Fatalf("Expected 1 email in MailHog, got %d", got.Total)
-	}
-
-	return got
-}
-
 type mailHogResponse struct {
 	Total int `json:"total"`
 	Items []struct {
@@ -170,6 +121,56 @@ type mailHogResponse struct {
 			Headers map[string][]string `json:"headers"`
 		} `json:"content"`
 	} `json:"items"`
+}
+
+func getMailHogPorts(ctx context.Context, container testcontainers.Container, t *testing.T) (int, string, string) {
+	t.Helper()
+
+	stmpPort, err := container.MappedPort(ctx, "1025/tcp")
+	if err != nil {
+		t.Fatalf("cannot get  mapped port: %v", err)
+	}
+
+	httpPort, err := container.MappedPort(ctx, "8025/tcp")
+	if err != nil {
+		t.Fatalf("cannot get http port: %v", err)
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
+
+	port, err := strconv.Atoi(stmpPort.Port())
+	if err != nil {
+		t.Fatalf("cannot convert mapped port: %v", err)
+	}
+
+	return port, httpPort.Port(), url
+}
+
+func parseMailHogResponse(url string, t *testing.T) mailHogResponse {
+	t.Helper()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("Cannot get response: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Cannot read body: %v", err)
+	}
+
+	got := mailHogResponse{}
+	if err = json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("Cannot unmarshal body: %v", err)
+	}
+
+	if got.Total == 0 {
+		t.Fatalf("Expected 1 email in MailHog, got %d", got.Total)
+	}
+
+	return got
 }
 
 func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
@@ -201,6 +202,9 @@ func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
 func downMailHog(ctx context.Context, container testcontainers.Container, t *testing.T) {
 	t.Helper()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	if err := container.Terminate(ctx); err != nil {
 		t.Errorf("cannot terminate container: %v", err)
 	}
@@ -212,16 +216,16 @@ func cleanMailHog(port string, t *testing.T) {
 	url := fmt.Sprintf("http://localhost:%s/api/v1/messages", port)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
-		t.Errorf("cleanMailHog: cannot create http request: %v", err)
+		t.Fatalf("cleanMailHog: cannot create http request: %v", err)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Errorf("cleanMailHog: cannot execute http request: %v", err)
+		t.Fatalf("cleanMailHog: cannot execute http request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("cleanMailHog: status code not ok: %v", resp.StatusCode)
+		t.Fatalf("cleanMailHog: status code not ok: %v", resp.StatusCode)
 	}
 }
