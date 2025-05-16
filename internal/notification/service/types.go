@@ -10,7 +10,7 @@ import (
 
 const (
 	maxRetries      = 3
-	basicRetryPause = 5
+	basicRetryPause = 0.5
 )
 
 type Mail struct {

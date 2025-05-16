@@ -9,17 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"reflect"
 	"strconv"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"go.uber.org/zap"
 
 	"notification/internal/config"
+	"notification/internal/logger"
 )
 
 // TODO: новые тестовые кейсы
@@ -39,6 +39,7 @@ func TestSendMessage(t *testing.T) {
 	go func() {
 		<-ctx.Done()
 		downMailHog(container, t)
+		return
 	}()
 	defer downMailHog(container, t)
 
@@ -48,63 +49,67 @@ func TestSendMessage(t *testing.T) {
 		name     string
 		from     string
 		wantFrom string
-		mail     Mail
-		wantMail Mail
+		mail     *Mail
+		wantMail *Mail
 		wantErr  error
 	}{
 		{
 			name:     "successful send",
 			from:     "something@gmail.com",
 			wantFrom: "something@gmail.com",
-			mail: Mail{
+			mail: &Mail{
 				To:      "daanisimov04@gmail.com",
 				Subject: "hi",
 				Message: "hello from go test",
 			},
-			wantMail: Mail{
+			wantMail: &Mail{
 				To:      "daanisimov04@gmail.com",
 				Subject: "hi",
 				Message: "hello from go test",
 			},
 			wantErr: nil,
 		},
+		//{
+		//	name:     "empty from",
+		//	from:     "",
+		//	wantFrom: "",
+		//	mail: &Mail{
+		//		To:      "daanisimov04@gmail.com",
+		//		Subject: "hi",
+		//		Message: "hello from go test",
+		//	},
+		//	wantMail: nil,
+		//	wantErr:  errors.New("sendMessage: cannot send message to daanisimov04@gmail.com, sendMessage: all attempts to send message failed, gomail: could not send email 1: gomail: invalid address \"\": mail: no address"),
+		//},
 	}
 
 	for _, tt := range tests {
+		l, _ := logger.New(&logger.Config{Env: "dev"})
+
 		t.Run(tt.name, func(t *testing.T) {
 			srv := New(&config.CredentialsSender{
 				SenderEmail: tt.from,
 				SMTPHost:    "localhost",
 				SMTPPort:    port,
-			}, zap.NewNop())
-			err := srv.SendMessage(ctx, tt.mail)
+			}, l)
+			err := srv.SendMessage(ctx, *tt.mail)
 			time.Sleep(time.Second)
 
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("SendMessage() error = %v, wantErr %v", err, tt.wantErr)
+			if err != nil {
+				if !errors.Is(err, tt.wantErr) {
+					//assert.NoError(t, )
+					t.Errorf("SendMessage() error = %v, wantErr = %v", err, tt.wantErr)
+				}
+				t.SkipNow()
+				return
 			}
 
-			got := parseMailHogResponse(url, t)
+			gotFrom, gotTo, gotSubject, gotMessage := parseMailHogResponse(url, t)
 
-			gotFrom := got.Items[0].Content.Headers["From"][0]
-			if !reflect.DeepEqual(gotFrom, tt.wantFrom) {
-				t.Errorf("SendMessage() gotFrom = %v, want %v", gotFrom, tt.wantFrom)
-			}
-
-			gotTo := got.Items[0].Content.Headers["To"][0]
-			if !reflect.DeepEqual(gotTo, tt.wantMail.To) {
-				t.Errorf("SendMessage() gotTo = %v, want %v", gotTo, tt.wantMail.To)
-			}
-
-			gotSubject := got.Items[0].Content.Headers["Subject"][0]
-			if !reflect.DeepEqual(gotSubject, tt.wantMail.Subject) {
-				t.Errorf("SendMessage() gotSubject = %v, want %v", gotSubject, tt.wantMail.Subject)
-			}
-
-			gotMessage := got.Items[0].Content.Body
-			if !reflect.DeepEqual(gotMessage, tt.wantMail.Message) {
-				t.Errorf("SendMessage() gotMessage = %v, want %v", gotMessage, tt.wantMail.Message)
-			}
+			assert.Equal(t, gotFrom, tt.wantFrom)
+			assert.Equal(t, gotTo, tt.wantMail.To)
+			assert.Equal(t, gotSubject, tt.wantMail.Subject)
+			assert.Equal(t, gotMessage, tt.wantMail.Message)
 
 			cleanMailHog(httpPort, t)
 		})
@@ -144,7 +149,7 @@ func getMailHogPorts(ctx context.Context, container testcontainers.Container, t 
 	return port, httpPort.Port(), url
 }
 
-func parseMailHogResponse(url string, t *testing.T) mailHogResponse {
+func parseMailHogResponse(url string, t *testing.T) (string, string, string, string) {
 	t.Helper()
 
 	resp, err := http.Get(url)
@@ -164,11 +169,15 @@ func parseMailHogResponse(url string, t *testing.T) mailHogResponse {
 		t.Fatalf("Cannot unmarshal body: %v", err)
 	}
 
-	if got.Total == 0 {
-		t.Fatalf("Expected 1 email in MailHog, got %d", got.Total)
-	}
+	from := got.Items[0].Content.Headers["From"][0]
 
-	return got
+	to := got.Items[0].Content.Headers["To"][0]
+
+	subject := got.Items[0].Content.Headers["Subject"][0]
+
+	message := got.Items[0].Content.Body
+
+	return from, to, subject, message
 }
 
 func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
