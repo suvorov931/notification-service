@@ -13,23 +13,23 @@ const (
 	basicRetryPause = 0.5
 )
 
-type Mail struct {
+type Email struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`
 }
 
-type MailService struct {
+type EmailService struct {
 	config *config.CredentialsSender
 	logger *zap.Logger
 }
 
-type MailSender interface {
-	SendMessage(ctx context.Context, mail Mail) error
+type EmailSender interface {
+	SendMessage(ctx context.Context, email Email) error
 }
 
-func New(config *config.CredentialsSender, logger *zap.Logger) *MailService {
-	return &MailService{
+func New(config *config.CredentialsSender, logger *zap.Logger) *EmailService {
+	return &EmailService{
 		config: config,
 		logger: logger,
 	}

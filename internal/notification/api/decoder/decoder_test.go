@@ -18,7 +18,7 @@ func TestDecoder(t *testing.T) {
 		headerKey   string
 		headerValue string
 		mail        string
-		want        *service.Mail
+		want        *service.Email
 		wantErr     error
 	}{
 		{
@@ -26,12 +26,12 @@ func TestDecoder(t *testing.T) {
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
 			mail: `{
-				"to": "To",
+				"to": "example@gmail.com",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: &service.Mail{
-				To:      "To",
+			want: &service.Email{
+				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
 			},
@@ -42,8 +42,8 @@ func TestDecoder(t *testing.T) {
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
 			mail: `{
-				"Subject": "Subject",
-				"message": "Message"
+				"to": "example@gmail.com",
+				"Subject": "Subject"
 			}`,
 			want:    nil,
 			wantErr: ErrNotAllFields,
@@ -128,6 +128,18 @@ func TestDecoder(t *testing.T) {
 			}`,
 			want:    nil,
 			wantErr: ErrUnknownError,
+		},
+		{
+			name:        "no valid to",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			mail: `{
+				"to": "no-valid",
+				"subject": "subject", 
+				"message": "message"
+			}`,
+			want:    nil,
+			wantErr: ErrNoValidRecipientAddress,
 		},
 	}
 	for _, tt := range tests {

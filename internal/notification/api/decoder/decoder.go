@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/mail"
 
 	"go.uber.org/zap"
 
@@ -14,15 +15,16 @@ import (
 )
 
 var (
-	ErrNotAllFields  = errors.New("DecodeMailRequest: Request body not all required fields are filled")
-	ErrHeaderNotJSON = errors.New("DecodeMailRequest: Header is not a application/json")
-	ErrSyntaxError   = errors.New("DecodeMailRequest: Request body contains badly-formed JSON")
-	ErrInvalidType   = errors.New("DecodeMailRequest: Request body contains an invalid value type")
-	ErrEmptyBody     = errors.New("DecodeMailRequest: Request body must not be empty")
-	ErrUnknownError  = errors.New("DecodeMailRequest: Unknown error")
+	ErrNotAllFields            = errors.New("DecodeMailRequest: Request body not all required fields are filled")
+	ErrHeaderNotJSON           = errors.New("DecodeMailRequest: Header is not a application/json")
+	ErrSyntaxError             = errors.New("DecodeMailRequest: Request body contains badly-formed JSON")
+	ErrInvalidType             = errors.New("DecodeMailRequest: Request body contains an invalid value type")
+	ErrEmptyBody               = errors.New("DecodeMailRequest: Request body must not be empty")
+	ErrNoValidRecipientAddress = errors.New("DecodeMailRequest: No valid recipient address found")
+	ErrUnknownError            = errors.New("DecodeMailRequest: Unknown error")
 )
 
-func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Mail, error) {
+func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Email, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
 		l.Error(ErrHeaderNotJSON.Error())
@@ -47,11 +49,11 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	var mail service.Mail
+	var email service.Email
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	err = dec.Decode(&mail)
+	err = dec.Decode(&email)
 
 	if err != nil {
 		var syntaxError *json.SyntaxError
@@ -83,12 +85,18 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 			return nil, ErrUnknownError
 		}
 	}
-	if mail.To == "" || mail.Message == "" || mail.Subject == "" {
+	if _, err = mail.ParseAddress(email.To); err != nil {
+		l.Error(ErrNoValidRecipientAddress.Error())
+		http.Error(w, "No valid recipient address found", http.StatusBadRequest)
+		return nil, ErrNoValidRecipientAddress
+	}
+
+	if email.To == "" || email.Message == "" || email.Subject == "" {
 		l.Error(ErrNotAllFields.Error())
 		http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
 
 		return nil, ErrNotAllFields
 	}
 
-	return &mail, nil
+	return &email, nil
 }

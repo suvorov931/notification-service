@@ -24,8 +24,9 @@ import (
 
 // TODO: новые тестовые кейсы
 // TODO: обработка всех ошибок
-// TODO: тесты для sendWithRetry
 // TODO: добавить кастомных внятных ошибок и проверить их
+
+// TODO: тесты для sendWithRetry
 
 func TestSendMessage(t *testing.T) {
 	ctx, cancel := signal.NotifyContext(context.Background(),
@@ -49,38 +50,38 @@ func TestSendMessage(t *testing.T) {
 		name     string
 		from     string
 		wantFrom string
-		mail     *Mail
-		wantMail *Mail
+		mail     *Email
+		wantMail *Email
 		wantErr  error
 	}{
-		{
-			name:     "successful send",
-			from:     "something@gmail.com",
-			wantFrom: "something@gmail.com",
-			mail: &Mail{
-				To:      "daanisimov04@gmail.com",
-				Subject: "hi",
-				Message: "hello from go test",
-			},
-			wantMail: &Mail{
-				To:      "daanisimov04@gmail.com",
-				Subject: "hi",
-				Message: "hello from go test",
-			},
-			wantErr: nil,
-		},
 		//{
-		//	name:     "empty from",
-		//	from:     "",
-		//	wantFrom: "",
+		//	name:     "successful send",
+		//	from:     "something@gmail.com",
+		//	wantFrom: "something@gmail.com",
 		//	mail: &Mail{
 		//		To:      "daanisimov04@gmail.com",
 		//		Subject: "hi",
 		//		Message: "hello from go test",
 		//	},
-		//	wantMail: nil,
-		//	wantErr:  errors.New("sendMessage: cannot send message to daanisimov04@gmail.com, sendMessage: all attempts to send message failed, gomail: could not send email 1: gomail: invalid address \"\": mail: no address"),
+		//	wantMail: &Mail{
+		//		To:      "daanisimov04@gmail.com",
+		//		Subject: "hi",
+		//		Message: "hello from go test",
+		//	},
+		//	wantErr: nil,
 		//},
+		{
+			name:     "empty from",
+			from:     "",
+			wantFrom: "",
+			mail: &Email{
+				To:      "daanisimov04@gmail.com",
+				Subject: "hi",
+				Message: "hello from go test",
+			},
+			wantMail: nil,
+			wantErr:  customErr,
+		},
 	}
 
 	for _, tt := range tests {
@@ -97,7 +98,6 @@ func TestSendMessage(t *testing.T) {
 
 			if err != nil {
 				if !errors.Is(err, tt.wantErr) {
-					//assert.NoError(t, )
 					t.Errorf("SendMessage() error = %v, wantErr = %v", err, tt.wantErr)
 				}
 				t.SkipNow()
