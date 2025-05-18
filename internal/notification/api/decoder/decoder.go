@@ -24,7 +24,7 @@ var (
 	ErrUnknownError            = errors.New("DecodeMailRequest: Unknown error")
 )
 
-func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Email, error) {
+func DecodeEmailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Email, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
 		l.Error(ErrHeaderNotJSON.Error())
@@ -85,6 +85,7 @@ func DecodeMailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*
 			return nil, ErrUnknownError
 		}
 	}
+
 	if _, err = mail.ParseAddress(email.To); err != nil {
 		l.Error(ErrNoValidRecipientAddress.Error())
 		http.Error(w, "No valid recipient address found", http.StatusBadRequest)

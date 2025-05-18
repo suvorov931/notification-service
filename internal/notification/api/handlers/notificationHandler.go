@@ -11,11 +11,11 @@ import (
 	"notification/internal/notification/service"
 )
 
-func NewSendNotificationHandler(l *zap.Logger, sender service.MailSender) http.HandlerFunc {
+func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		mail, err := decoder.DecodeMailRequest(w, r, l)
+		mail, err := decoder.DecodeEmailRequest(w, r, l)
 		if err != nil {
 			return
 		}

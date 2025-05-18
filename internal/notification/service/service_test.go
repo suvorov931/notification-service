@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.uber.org/zap"
 
 	"notification/internal/config"
-	"notification/internal/logger"
 )
 
 // TODO: новые тестовые кейсы
@@ -47,53 +47,61 @@ func TestSendMessage(t *testing.T) {
 	port, httpPort, url := getMailHogPorts(ctx, container, t)
 
 	tests := []struct {
-		name     string
-		from     string
-		wantFrom string
-		mail     *Email
-		wantMail *Email
-		wantErr  error
+		name      string
+		port      int
+		from      string
+		wantFrom  string
+		email     *Email
+		wantEmail *Email
+		wantErr   error
 	}{
-		//{
-		//	name:     "successful send",
-		//	from:     "something@gmail.com",
-		//	wantFrom: "something@gmail.com",
-		//	mail: &Mail{
-		//		To:      "daanisimov04@gmail.com",
-		//		Subject: "hi",
-		//		Message: "hello from go test",
-		//	},
-		//	wantMail: &Mail{
-		//		To:      "daanisimov04@gmail.com",
-		//		Subject: "hi",
-		//		Message: "hello from go test",
-		//	},
-		//	wantErr: nil,
-		//},
 		{
-			name:     "empty from",
-			from:     "",
-			wantFrom: "",
-			mail: &Email{
+			name:     "successful send",
+			port:     port,
+			from:     "something@gmail.com",
+			wantFrom: "something@gmail.com",
+			email: &Email{
 				To:      "daanisimov04@gmail.com",
 				Subject: "hi",
 				Message: "hello from go test",
 			},
-			wantMail: nil,
-			wantErr:  customErr,
+			wantEmail: &Email{
+				To:      "daanisimov04@gmail.com",
+				Subject: "hi",
+				Message: "hello from go test",
+			},
+			wantErr: nil,
 		},
 	}
 
-	for _, tt := range tests {
-		l, _ := logger.New(&logger.Config{Env: "dev"})
+	t.Run("smtp server unreachable", func(t *testing.T) {
+		srv := New(&config.CredentialsSender{
+			SenderEmail:    "something@gmail.com",
+			SMTPHost:       "localhost",
+			SMTPPort:       9999,
+			SenderPassword: "invalid",
+		}, zap.NewNop())
 
+		ctx := context.Background()
+
+		err := srv.SendMessage(ctx, Email{
+			To:      "daanisimov04@gmail.com",
+			Subject: "hi",
+			Message: "hello from go test",
+		})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SendMessage: all attempts to send message failed")
+	})
+
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := New(&config.CredentialsSender{
 				SenderEmail: tt.from,
 				SMTPHost:    "localhost",
 				SMTPPort:    port,
-			}, l)
-			err := srv.SendMessage(ctx, *tt.mail)
+			}, zap.NewNop())
+			err := srv.SendMessage(ctx, *tt.email)
 			time.Sleep(time.Second)
 
 			if err != nil {
@@ -107,9 +115,9 @@ func TestSendMessage(t *testing.T) {
 			gotFrom, gotTo, gotSubject, gotMessage := parseMailHogResponse(url, t)
 
 			assert.Equal(t, gotFrom, tt.wantFrom)
-			assert.Equal(t, gotTo, tt.wantMail.To)
-			assert.Equal(t, gotSubject, tt.wantMail.Subject)
-			assert.Equal(t, gotMessage, tt.wantMail.Message)
+			assert.Equal(t, gotTo, tt.wantEmail.To)
+			assert.Equal(t, gotSubject, tt.wantEmail.Subject)
+			assert.Equal(t, gotMessage, tt.wantEmail.Message)
 
 			cleanMailHog(httpPort, t)
 		})

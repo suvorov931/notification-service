@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"math"
 	"net/mail"
@@ -13,12 +12,11 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-var ErrNoValidFromAddress = errors.New("SendMessage: no valid sender address")
-
 func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("SendMessage: context canceled: %w", ctx.Err())
+		s.logger.Error("SendMessage: context canceled", zap.Error(ctx.Err()))
+		return fmt.Errorf("SendMessage: context canceled")
 	default:
 	}
 
@@ -26,7 +24,9 @@ func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
 
 	_, err := mail.ParseAddress(s.config.SenderEmail)
 	if err != nil {
-		return ErrNoValidFromAddress
+		s.logger.Error("SendMessage: no valid sender address", zap.Error(err))
+
+		return fmt.Errorf("SendMessage: no valid sender address")
 	}
 
 	msg.SetHeader("From", s.config.SenderEmail)
@@ -48,9 +48,9 @@ func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
 
 	s.logger.Info(fmt.Sprintf("SendMessage: sending email to %s", email.To))
 
-	if err := s.sendWithRetry(ctx, dialer, msg); err != nil {
+	if err = s.sendWithRetry(ctx, dialer, msg); err != nil {
 		s.logger.Error(fmt.Sprintf("SendMessage: cannot send message to %s", email.To), zap.Error(err))
-		return fmt.Errorf("sendMessage: cannot send message to %s, %w", email.To, err)
+		return fmt.Errorf("SendMessage: cannot send message to %s, %w", email.To, err)
 	}
 
 	s.logger.Info(fmt.Sprintf("SendMessage: successfully sent message to %s", email.To))
@@ -63,7 +63,8 @@ func (s *EmailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer,
 	for i := 0; i < maxRetries+1; i++ {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("SendMessage: context canceled: %w", ctx.Err())
+			s.logger.Error("SendMessage: context canceled", zap.Error(ctx.Err()))
+			return fmt.Errorf("SendMessage: context canceled")
 		default:
 		}
 
@@ -78,7 +79,8 @@ func (s *EmailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer,
 			select {
 			case <-time.After(pause):
 			case <-ctx.Done():
-				return fmt.Errorf("SendMessage: context canceled: %w", ctx.Err())
+				s.logger.Error("SendMessage: context canceled", zap.Error(ctx.Err()))
+				return fmt.Errorf("SendMessage: context canceled")
 			}
 		}
 
@@ -89,7 +91,6 @@ func (s *EmailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer,
 
 		return nil
 	}
-
-	s.logger.Error("SendMessage: all attempts to send message failed", zap.Error(lastErr))
-	return fmt.Errorf("sendMessage: all attempts to send message failed, %w", lastErr)
+	s.logger.Error("SendMessage: all attempts to send message failed, last error:", zap.Error(lastErr))
+	return fmt.Errorf("SendMessage: all attempts to send message failed, last error: %w", lastErr)
 }
