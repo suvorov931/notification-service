@@ -149,7 +149,7 @@ func TestDecoder(t *testing.T) {
 
 			r.Header.Set(tt.headerKey, tt.headerValue)
 
-			got, err := DecodeMailRequest(w, r, zap.NewNop())
+			got, err := DecodeEmailRequest(w, r, zap.NewNop())
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("DecodeMailRequest(): error = %v, wantErr %v", err, tt.wantErr)
