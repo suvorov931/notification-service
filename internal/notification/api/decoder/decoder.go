@@ -14,6 +14,11 @@ import (
 	"notification/internal/notification/service"
 )
 
+const (
+	KeyForInstantSending = "instantSending"
+	KeyForDelayedSending = "delayedSending"
+)
+
 var (
 	ErrNotAllFields            = errors.New("DecodeMailRequest: Request body not all required fields are filled")
 	ErrHeaderNotJSON           = errors.New("DecodeMailRequest: Header is not a application/json")
@@ -22,9 +27,10 @@ var (
 	ErrEmptyBody               = errors.New("DecodeMailRequest: Request body must not be empty")
 	ErrNoValidRecipientAddress = errors.New("DecodeMailRequest: No valid recipient address found")
 	ErrUnknownError            = errors.New("DecodeMailRequest: Unknown error")
+	ErrUnknownKey              = errors.New("DecodeMailRequest: Unknown key")
 )
 
-func DecodeEmailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (*service.Email, error) {
+func DecodeEmailRequest(key string, w http.ResponseWriter, r *http.Request, l *zap.Logger) (any, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
 		l.Error(ErrHeaderNotJSON.Error())
@@ -49,11 +55,20 @@ func DecodeEmailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (
 
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	var email service.Email
+	var email any
+	switch key {
+	case KeyForInstantSending:
+		email = &service.Email{}
+	case KeyForDelayedSending:
+		email = &service.EmailWithTime{}
+	default:
+		l.Error(ErrUnknownError.Error(), zap.String("key", key))
+		return nil, ErrUnknownKey
+	}
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	err = dec.Decode(&email)
+	err = dec.Decode(email)
 
 	if err != nil {
 		var syntaxError *json.SyntaxError
@@ -86,18 +101,37 @@ func DecodeEmailRequest(w http.ResponseWriter, r *http.Request, l *zap.Logger) (
 		}
 	}
 
-	if _, err = mail.ParseAddress(email.To); err != nil {
-		l.Error(ErrNoValidRecipientAddress.Error())
-		http.Error(w, "No valid recipient address found", http.StatusBadRequest)
-		return nil, ErrNoValidRecipientAddress
+	switch t := email.(type) {
+	case *service.Email:
+		if t.To == "" || t.Message == "" || t.Subject == "" {
+			l.Error(ErrNotAllFields.Error())
+			http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
+
+			return nil, ErrNotAllFields
+		}
+
+		if _, err := mail.ParseAddress(t.To); err != nil {
+			l.Error(ErrNoValidRecipientAddress.Error())
+			http.Error(w, "No valid recipient address found", http.StatusBadRequest)
+
+			return nil, ErrNoValidRecipientAddress
+		}
+
+	case *service.EmailWithTime:
+		if t.Time == "" || t.To == "" || t.Message == "" || t.Subject == "" {
+			l.Error(ErrNotAllFields.Error())
+			http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
+
+			return nil, ErrNotAllFields
+		}
+
+		if _, err := mail.ParseAddress(t.To); err != nil {
+			l.Error(ErrNoValidRecipientAddress.Error())
+			http.Error(w, "No valid recipient address found", http.StatusBadRequest)
+
+			return nil, ErrNoValidRecipientAddress
+		}
 	}
 
-	if email.To == "" || email.Message == "" || email.Subject == "" {
-		l.Error(ErrNotAllFields.Error())
-		http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
-
-		return nil, ErrNotAllFields
-	}
-
-	return &email, nil
+	return email, nil
 }
