@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -15,7 +16,7 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		mail, err := decoder.DecodeEmailRequest(w, r, l)
+		email, err := decoder.DecodeEmailRequest(decoder.KeyForInstantSending, w, r, l)
 		if err != nil {
 			return
 		}
@@ -31,7 +32,7 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.
 			l.Warn("NewSendNotificationHandler: ResponseWriter does not support flushing")
 		}
 
-		err = sender.SendMessage(ctx, *mail)
+		err = sender.SendMessage(ctx, *email.(*service.Email))
 		if err != nil {
 			if errors.Is(ctx.Err(), context.Canceled) {
 				l.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))

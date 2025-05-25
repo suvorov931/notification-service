@@ -10,10 +10,10 @@ import (
 )
 
 type Config struct {
-	HttpServer        HttpServer        `yaml:"HTTP_SERVER" env:"HTTP_SERVER"`
-	CredentialsSender CredentialsSender `yaml:"CREDENTIALS_SENDER" env:"CREDENTIALS_SENDER"`
-	Redis             rds.Config        `yaml:"REDIS" env:"REDIS"`
-	Logger            logger.Config     `yaml:"LOGGER" env:"LOGGER"`
+	HttpServer        HttpServer    `yaml:"HTTP_SERVER" env:"HTTP_SERVER"`
+	CredentialsSender MailSender    `yaml:"MAIL_SENDER" env:"MAIL_SENDER"`
+	Redis             rds.Config    `yaml:"REDIS" env:"REDIS"`
+	Logger            logger.Config `yaml:"LOGGER" env:"LOGGER"`
 }
 
 type HttpServer struct {
@@ -21,7 +21,7 @@ type HttpServer struct {
 	Port string `yaml:"HTTP_PORT" env:"HTTP_PORT"`
 }
 
-type CredentialsSender struct {
+type MailSender struct {
 	SenderEmail    string `yaml:"SENDER_EMAIL" env:"SENDER_EMAIL"`
 	SenderPassword string `yaml:"SENDER_PASSWORD" env:"SENDER_PASSWORD"`
 	SMTPHost       string `yaml:"SMTP_HOST" env:"SMTP_HOST"`
