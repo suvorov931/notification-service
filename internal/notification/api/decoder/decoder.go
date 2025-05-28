@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/mail"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -20,120 +21,203 @@ const (
 )
 
 var (
-	ErrNotAllFields            = errors.New("DecodeMailRequest: Request body not all required fields are filled")
-	ErrHeaderNotJSON           = errors.New("DecodeMailRequest: Header is not a application/json")
-	ErrSyntaxError             = errors.New("DecodeMailRequest: Request body contains badly-formed JSON")
-	ErrInvalidType             = errors.New("DecodeMailRequest: Request body contains an invalid value type")
-	ErrEmptyBody               = errors.New("DecodeMailRequest: Request body must not be empty")
-	ErrNoValidRecipientAddress = errors.New("DecodeMailRequest: No valid recipient address found")
+	ErrNotAllFields            = errors.New("DecodeMailRequest: checkFields: request body not all required fields are filled")
+	ErrNoValidRecipientAddress = errors.New("DecodeMailRequest: checkFields: no valid recipient address found")
+	ErrHeaderNotJSON           = errors.New("DecodeMailRequest: checkHeaders: header is not a application/json")
+	ErrSyntaxError             = errors.New("DecodeMailRequest: errDuringParse: request body contains badly-formed JSON")
+	ErrInvalidType             = errors.New("DecodeMailRequest: errDuringParse: request body contains an invalid value type")
+	ErrEmptyBody               = errors.New("DecodeMailRequest: decodeBody: request body must not be empty")
+	ErrTimeNotAtFuture         = errors.New("DecodeMailRequest: checkTime: time not at future")
+	ErrNoValidTimeFiled        = errors.New("DecodeMailRequest: checkTime: no valid time field")
+	ErrUnknownKey              = errors.New("DecodeMailRequest: determineType: unknown key")
 	ErrUnknownError            = errors.New("DecodeMailRequest: Unknown error")
-	ErrUnknownKey              = errors.New("DecodeMailRequest: Unknown key")
+	ErrUnknownType             = errors.New("DecodeMailRequest: Unknown type")
 )
 
 // TODO: попробовать переделать через дженерик
+// TODO: в тестах добавить проверку w
 
-func DecodeEmailRequest(key string, w http.ResponseWriter, r *http.Request, l *zap.Logger) (any, error) {
-	ct := r.Header.Get("Content-Type")
-	if ct != "application/json" {
-		l.Error(ErrHeaderNotJSON.Error())
-		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+type decoder struct {
+	logger *zap.Logger
+	r      *http.Request
+	w      http.ResponseWriter
+}
 
-		return nil, ErrHeaderNotJSON
+func DecodeEmailRequest(key string, w http.ResponseWriter, r *http.Request, logger *zap.Logger) (any, error) {
+	d := &decoder{
+		logger: logger,
+		r:      r,
+		w:      w,
 	}
 
-	body, err := io.ReadAll(r.Body)
+	if err := d.checkHeaders(); err != nil {
+		return nil, err
+	}
+
+	email, err := d.createEmailModel(key)
 	if err != nil {
-		l.Error(ErrEmptyBody.Error())
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-
-		return nil, ErrEmptyBody
-	}
-	if len(body) == 0 {
-		l.Error(ErrEmptyBody.Error())
-		http.Error(w, "Request body must not be empty", http.StatusBadRequest)
-
-		return nil, ErrEmptyBody
+		return nil, err
 	}
 
-	r.Body = io.NopCloser(bytes.NewBuffer(body))
+	if err = d.decodeBody(email); err != nil {
+		if errors.Is(err, ErrEmptyBody) {
+			return nil, ErrEmptyBody
+		}
 
+		return nil, d.errDuringParse(err)
+	}
+
+	return d.checkFields(email)
+}
+
+func (d *decoder) checkHeaders() error {
+	ct := d.r.Header.Get("Content-Type")
+	if ct != "application/json" {
+		d.logger.Error(ErrHeaderNotJSON.Error())
+		http.Error(d.w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+
+		return ErrHeaderNotJSON
+	}
+
+	return nil
+}
+
+func (d *decoder) createEmailModel(key string) (any, error) {
 	var email any
 	switch key {
 	case KeyForInstantSending:
 		email = &service.Email{}
 	case KeyForDelayedSending:
-		email = &service.EmailWithTime{}
+		email = &service.TempEmailWithTime{}
 	default:
-		l.Error(ErrUnknownError.Error(), zap.String("key", key))
+		d.logger.Error(ErrUnknownKey.Error(), zap.String("key", key))
 		return nil, ErrUnknownKey
 	}
 
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	err = dec.Decode(email)
+	return email, nil
+}
 
+func (d *decoder) decodeBody(email any) error {
+	body, err := io.ReadAll(d.r.Body)
 	if err != nil {
-		var syntaxError *json.SyntaxError
-		var unmarshalTypeError *json.UnmarshalTypeError
+		d.logger.Error(ErrEmptyBody.Error())
+		http.Error(d.w, "Failed to read request body", http.StatusBadRequest)
 
-		switch {
-		case errors.As(err, &syntaxError):
-			l.Error(ErrSyntaxError.Error())
-			http.Error(w,
-				fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset),
-				http.StatusBadRequest)
+		return ErrEmptyBody
+	}
+	if len(body) == 0 {
+		d.logger.Error(ErrEmptyBody.Error())
+		http.Error(d.w, "Request body must not be empty", http.StatusBadRequest)
 
-			return nil, ErrSyntaxError
-
-		case errors.As(err, &unmarshalTypeError):
-			l.Error(ErrInvalidType.Error())
-			http.Error(w,
-				fmt.Sprintf(
-					"Request body contains an invalid value for the %q field (at position %d)",
-					unmarshalTypeError.Field, unmarshalTypeError.Offset),
-				http.StatusBadRequest)
-
-			return nil, ErrInvalidType
-
-		default:
-			l.Error(ErrUnknownError.Error())
-			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-
-			return nil, ErrUnknownError
-		}
+		return ErrEmptyBody
 	}
 
+	d.r.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	dec := json.NewDecoder(d.r.Body)
+	dec.DisallowUnknownFields()
+	return dec.Decode(email)
+}
+
+func (d *decoder) errDuringParse(err error) error {
+	var syntaxError *json.SyntaxError
+	var unmarshalTypeError *json.UnmarshalTypeError
+
+	switch {
+	case errors.As(err, &syntaxError):
+		d.logger.Error(ErrSyntaxError.Error())
+		http.Error(d.w,
+			fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset),
+			http.StatusBadRequest)
+
+		return ErrSyntaxError
+
+	case errors.As(err, &unmarshalTypeError):
+		d.logger.Error(ErrInvalidType.Error())
+		http.Error(d.w,
+			fmt.Sprintf(
+				"Request body contains an invalid value for the %q field (at position %d)",
+				unmarshalTypeError.Field, unmarshalTypeError.Offset),
+			http.StatusBadRequest)
+
+		return ErrInvalidType
+
+	default:
+		d.logger.Error(ErrUnknownError.Error())
+		http.Error(d.w, http.StatusText(500), http.StatusInternalServerError)
+
+		return ErrUnknownError
+	}
+}
+
+func (d *decoder) checkFields(email any) (any, error) {
 	switch t := email.(type) {
 	case *service.Email:
 		if t.To == "" || t.Message == "" || t.Subject == "" {
-			l.Error(ErrNotAllFields.Error())
-			http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
+			d.logger.Error(ErrNotAllFields.Error())
+			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
 
 			return nil, ErrNotAllFields
 		}
 
 		if _, err := mail.ParseAddress(t.To); err != nil {
-			l.Error(ErrNoValidRecipientAddress.Error())
-			http.Error(w, "No valid recipient address found", http.StatusBadRequest)
+			d.logger.Error(ErrNoValidRecipientAddress.Error())
+			http.Error(d.w, "No valid recipient address found", http.StatusBadRequest)
 
 			return nil, ErrNoValidRecipientAddress
 		}
 
-	case *service.EmailWithTime:
+		return email, nil
+
+	case *service.TempEmailWithTime:
 		if t.Time == "" || t.To == "" || t.Message == "" || t.Subject == "" {
-			l.Error(ErrNotAllFields.Error())
-			http.Error(w, "Not all fields in the request body are filled in", http.StatusBadRequest)
+			d.logger.Error(ErrNotAllFields.Error())
+			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
 
 			return nil, ErrNotAllFields
 		}
 
+		if err := d.checkTime(t.Time); err != nil {
+			return nil, err
+		}
+
 		if _, err := mail.ParseAddress(t.To); err != nil {
-			l.Error(ErrNoValidRecipientAddress.Error())
-			http.Error(w, "No valid recipient address found", http.StatusBadRequest)
+			d.logger.Error(ErrNoValidRecipientAddress.Error())
+			http.Error(d.w, "No valid recipient address found", http.StatusBadRequest)
 
 			return nil, ErrNoValidRecipientAddress
 		}
+
+		res := service.EmailWithTime{
+			Time: t.Time,
+			Email: service.Email{
+				To:      t.To,
+				Subject: t.Subject,
+				Message: t.Message,
+			},
+		}
+
+		return &res, nil
 	}
 
-	return email, nil
+	return nil, ErrUnknownError
+}
+
+func (d *decoder) checkTime(t string) error {
+	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", t, time.UTC)
+	if err != nil {
+		d.logger.Info(ErrNoValidTimeFiled.Error())
+		http.Error(d.w, "The specified time is not a valid", http.StatusBadRequest)
+
+		return ErrNoValidTimeFiled
+	}
+
+	if !UTCTime.After(time.Now()) {
+		d.logger.Info(ErrTimeNotAtFuture.Error())
+		http.Error(d.w, "The specified time is not in the future", http.StatusBadRequest)
+
+		return ErrTimeNotAtFuture
+	}
+
+	return nil
 }

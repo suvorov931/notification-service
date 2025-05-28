@@ -172,18 +172,48 @@ func TestDecoder(t *testing.T) {
 			headerValue: "application/json",
 			key:         KeyForDelayedSending,
 			mail: `{
-				"time": "2025-05-24 00:33:10",
+				"time": "2035-05-24 00:33:10",
 				"to": "example@gmail.com",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want: &service.EmailWithTime{
-				Time:    "2025-05-24 00:33:10",
-				To:      "example@gmail.com",
-				Subject: "Subject",
-				Message: "Message",
+				Time: "2035-05-24 00:33:10",
+				Email: service.Email{
+					To:      "example@gmail.com",
+					Subject: "Subject",
+					Message: "Message",
+				},
 			},
 			wantErr: nil,
+		},
+		{
+			name:        "time not at future",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			key:         KeyForDelayedSending,
+			mail: `{
+				"time": "2015-05-24 00:33:10",
+				"to": "example@gmail.com",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrTimeNotAtFuture,
+		},
+		{
+			name:        "no valid time field",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			key:         KeyForDelayedSending,
+			mail: `{
+				"time": "something",
+				"to": "example@gmail.com",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			want:    nil,
+			wantErr: ErrNoValidTimeFiled,
 		},
 		{
 			name:        "two fields with time",

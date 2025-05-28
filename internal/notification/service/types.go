@@ -14,11 +14,20 @@ type Email struct {
 	Message string `json:"message"`
 }
 
-type EmailWithTime struct {
+type Timestamp struct {
+	Time string `json:"time"`
+}
+
+type TempEmailWithTime struct {
 	Time    string `json:"time"`
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`
+}
+
+type EmailWithTime struct {
+	Time  string
+	Email Email
 }
 
 type EmailService struct {
