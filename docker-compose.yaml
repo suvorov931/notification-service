@@ -1,10 +1,15 @@
 name: notification-service
 
 services:
-  notification-service:
-    container_name: notification-service
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+#  notification-service:
+#    container_name: notification-service
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile
+#    ports:
+#      - "8080:8080"
+  redis:
+    container_name: redis-container
+    image: redis:8.0
     ports:
-      - "8080:8080"
+      - "6379:6379"

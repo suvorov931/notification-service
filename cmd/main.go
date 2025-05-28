@@ -19,6 +19,7 @@ import (
 	"notification/internal/logger"
 	"notification/internal/notification/api/handlers"
 	"notification/internal/notification/service"
+	rds2 "notification/internal/rds"
 )
 
 func main() {
@@ -50,7 +51,13 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
+	rds, err := rds2.New(ctx, cfg.Redis)
+	if err != nil {
+		l.Error("cannot initialize rds client", zap.Error(err))
+	}
+
 	router.Post("/send-notification", handlers.NewSendNotificationHandler(l, s))
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(l, s, rds))
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),
@@ -81,14 +88,14 @@ func main() {
 }
 
 // TODO: GitLab CI/CD
+// TODO: многопоточность
 // TODO: разобраться с отменой на клиентской стороне
 // TODO: реализовать функцию для отправки сообщений через время
-// TODO: localhost:8080/sending-via-time/...json data...
-// TODO: json data: sending time, Mail{}
 
 //curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \
 //-d '{
-//  "to":"daanisimov04@gmail.com",
-//  "subject":"subject",
-//  "message":"message"
+// "time":"2035-01-02 15:04:05"
+// "to":"daanisimov04@gmail.com",
+// "subject":"subject",
+// "message":"message"
 //}'

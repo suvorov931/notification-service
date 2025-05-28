@@ -30,6 +30,8 @@ var (
 	ErrUnknownKey              = errors.New("DecodeMailRequest: Unknown key")
 )
 
+// TODO: попробовать переделать через дженерик
+
 func DecodeEmailRequest(key string, w http.ResponseWriter, r *http.Request, l *zap.Logger) (any, error) {
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {

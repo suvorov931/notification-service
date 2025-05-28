@@ -80,11 +80,10 @@ func TestSendMessage(t *testing.T) {
 			SMTPHost:        "localhost",
 			SMTPPort:        9999,
 			SenderPassword:  "invalid",
-			MaxRetries:      3,
+			MaxRetries:      1,
 			BasicRetryPause: 1,
 		}, zap.NewNop())
-
-		ctx := context.Background()
+		fmt.Println(srv.config)
 
 		err := srv.SendMessage(ctx, Email{
 			To:      "daanisimov04@gmail.com",
