@@ -75,11 +75,13 @@ func TestSendMessage(t *testing.T) {
 	}
 
 	t.Run("smtp server unreachable", func(t *testing.T) {
-		srv := New(&config.CredentialsSender{
-			SenderEmail:    "something@gmail.com",
-			SMTPHost:       "localhost",
-			SMTPPort:       9999,
-			SenderPassword: "invalid",
+		srv := New(&config.MailSender{
+			SenderEmail:     "something@gmail.com",
+			SMTPHost:        "localhost",
+			SMTPPort:        9999,
+			SenderPassword:  "invalid",
+			MaxRetries:      3,
+			BasicRetryPause: 1,
 		}, zap.NewNop())
 
 		ctx := context.Background()
@@ -96,7 +98,7 @@ func TestSendMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := New(&config.CredentialsSender{
+			srv := New(&config.MailSender{
 				SenderEmail: tt.from,
 				SMTPHost:    "localhost",
 				SMTPPort:    port,

@@ -85,11 +85,10 @@ func main() {
 // TODO: реализовать функцию для отправки сообщений через время
 // TODO: localhost:8080/sending-via-time/...json data...
 // TODO: json data: sending time, Mail{}
-// TODO: дописать интеграцию с конфигом
 
-//curl -X POST http://localhost:8080/ -H "Content-Type: application/json" \
+//curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \
 //-d '{
-//   "to":"daanisimov04@gmail.com",
-//   "subject":"subject",
-//   "message":"message"
+//  "to":"daanisimov04@gmail.com",
+//  "subject":"subject",
+//  "message":"message"
 //}'

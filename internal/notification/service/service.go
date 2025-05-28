@@ -43,7 +43,7 @@ func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
 
 	dialer.TLSConfig = &tls.Config{
 		ServerName:         s.config.SMTPHost,
-		InsecureSkipVerify: false,
+		InsecureSkipVerify: s.config.SkipVerify,
 	}
 
 	s.logger.Info(fmt.Sprintf("SendMessage: sending email to %s", email.To))
@@ -60,7 +60,7 @@ func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
 func (s *EmailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, msg *gomail.Message) error {
 	var lastErr error
 
-	for i := 0; i < maxRetries+1; i++ {
+	for i := 0; i < s.config.MaxRetries+1; i++ {
 		select {
 		case <-ctx.Done():
 			s.logger.Error("SendMessage: context canceled", zap.Error(ctx.Err()))
@@ -69,7 +69,7 @@ func (s *EmailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer,
 		}
 
 		if i > 0 {
-			pause := time.Duration(basicRetryPause*math.Pow(2, float64(i-1))) * time.Second
+			pause := time.Duration(float64(s.config.BasicRetryPause)*math.Pow(2, float64(i-1))) * time.Second
 			s.logger.Info(
 				"SendMessage: retrying send message",
 				zap.Int("attempt", i),
