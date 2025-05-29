@@ -61,10 +61,6 @@ func DecodeEmailRequest(key string, w http.ResponseWriter, r *http.Request, logg
 	}
 
 	if err = d.decodeBody(email); err != nil {
-		if errors.Is(err, ErrEmptyBody) {
-			return nil, ErrEmptyBody
-		}
-
 		return nil, d.errDuringParse(err)
 	}
 
@@ -106,6 +102,7 @@ func (d *decoder) decodeBody(email any) error {
 
 		return ErrEmptyBody
 	}
+
 	if len(body) == 0 {
 		d.logger.Error(ErrEmptyBody.Error())
 		http.Error(d.w, "Request body must not be empty", http.StatusBadRequest)
@@ -121,6 +118,10 @@ func (d *decoder) decodeBody(email any) error {
 }
 
 func (d *decoder) errDuringParse(err error) error {
+	if errors.Is(err, ErrEmptyBody) {
+		return ErrEmptyBody
+	}
+
 	var syntaxError *json.SyntaxError
 	var unmarshalTypeError *json.UnmarshalTypeError
 
