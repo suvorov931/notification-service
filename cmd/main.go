@@ -94,7 +94,14 @@ func main() {
 
 //curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \
 //-d '{
-//"time":"2035-01-02 15:04:05"
+//"to":"daanisimov04@gmail.com",
+//"subject":"subject",
+//"message":"message"
+//}'
+
+//curl -X POST http://localhost:8080/send-notification-via-time -H "Content-Type: application/json" \
+//-d '{
+//"time":"2035-01-02 15:04:05",
 //"to":"daanisimov04@gmail.com",
 //"subject":"subject",
 //"message":"message"
