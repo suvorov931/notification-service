@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/notification/api"
 	"notification/internal/notification/api/decoder"
 	"notification/internal/notification/service"
 )
@@ -15,7 +16,7 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		email, err := decoder.DecodeEmailRequest(decoder.KeyForInstantSending, w, r, l)
+		email, err := decoder.DecodeEmailRequest(api.KeyForInstantSending, w, r, l)
 		if err != nil {
 			return
 		}

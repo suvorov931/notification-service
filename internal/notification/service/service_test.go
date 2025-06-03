@@ -18,8 +18,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/zap"
-
-	"notification/internal/config"
 )
 
 // TODO: новые тестовые кейсы
@@ -75,7 +73,7 @@ func TestSendMessage(t *testing.T) {
 	}
 
 	t.Run("smtp server unreachable", func(t *testing.T) {
-		srv := New(&config.MailSender{
+		srv := New(&MailSender{
 			SenderEmail:     "something@gmail.com",
 			SMTPHost:        "localhost",
 			SMTPPort:        9999,
@@ -96,7 +94,7 @@ func TestSendMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := New(&config.MailSender{
+			srv := New(&MailSender{
 				SenderEmail: tt.from,
 				SMTPHost:    "localhost",
 				SMTPPort:    port,

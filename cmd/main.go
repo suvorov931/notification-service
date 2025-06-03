@@ -19,6 +19,7 @@ import (
 	"notification/internal/logger"
 	"notification/internal/notification/api/handlers"
 	"notification/internal/notification/service"
+	"notification/internal/rds"
 )
 
 func main() {
@@ -40,6 +41,11 @@ func main() {
 	}
 	defer l.Sync()
 
+	rc, err := rds.New(ctx, cfg.Redis, l)
+	if err != nil {
+		l.Error("cannot initialize rds client", zap.Error(err))
+	}
+
 	s := service.New(&cfg.CredentialsSender, l)
 
 	router := chi.NewRouter()
@@ -51,6 +57,7 @@ func main() {
 	router.Use(middleware.URLFormat)
 
 	router.Post("/send-notification", handlers.NewSendNotificationHandler(l, s))
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(l, *rc))
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),
@@ -88,6 +95,14 @@ func main() {
 
 //curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \
 //-d '{
+//"to":"daanisimov04@gmail.com",
+//"subject":"subject",
+//"message":"message"
+//}'
+
+//curl -X POST http://localhost:8080/send-notification-via-time -H "Content-Type: application/json" \
+//-d '{
+//"time":"2035-01-02 15:04:05",
 //"to":"daanisimov04@gmail.com",
 //"subject":"subject",
 //"message":"message"

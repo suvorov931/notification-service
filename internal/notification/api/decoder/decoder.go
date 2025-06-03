@@ -12,12 +12,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/notification/api"
 	"notification/internal/notification/service"
-)
-
-const (
-	KeyForInstantSending = "instantSending"
-	KeyForDelayedSending = "delayedSending"
 )
 
 var (
@@ -79,9 +75,9 @@ func (d *decoder) checkHeaders() error {
 func (d *decoder) createEmailModel(key string) (any, error) {
 	var email any
 	switch key {
-	case KeyForInstantSending:
+	case api.KeyForInstantSending:
 		email = &service.Email{}
-	case KeyForDelayedSending:
+	case api.KeyForDelayedSending:
 		email = &service.TempEmailWithTime{}
 	default:
 		http.Error(d.w, http.StatusText(500), http.StatusInternalServerError)
