@@ -31,7 +31,6 @@ var (
 	ErrNoValidTimeFiled        = errors.New("DecodeMailRequest: checkTime: no valid time field")
 	ErrUnknownKey              = errors.New("DecodeMailRequest: determineType: unknown key")
 	ErrUnknownError            = errors.New("DecodeMailRequest: Unknown error")
-	ErrUnknownType             = errors.New("DecodeMailRequest: Unknown type")
 )
 
 // TODO: попробовать переделать через дженерик
@@ -87,6 +86,8 @@ func (d *decoder) createEmailModel(key string) (any, error) {
 	case KeyForDelayedSending:
 		email = &service.TempEmailWithTime{}
 	default:
+		http.Error(d.w, http.StatusText(500), http.StatusInternalServerError)
+
 		d.logger.Error(ErrUnknownKey.Error(), zap.String("key", key))
 		return nil, ErrUnknownKey
 	}

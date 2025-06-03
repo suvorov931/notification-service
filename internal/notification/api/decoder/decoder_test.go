@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -14,13 +15,15 @@ import (
 
 func TestDecoder(t *testing.T) {
 	tests := []struct {
-		name        string
-		headerKey   string
-		headerValue string
-		key         string
-		mail        string
-		want        any
-		wantErr     error
+		name         string
+		headerKey    string
+		headerValue  string
+		key          string
+		mail         string
+		want         any
+		wantErr      error
+		wantStatus   int
+		wantResponse string
 	}{
 		{
 			name:        "success decoding",
@@ -37,7 +40,9 @@ func TestDecoder(t *testing.T) {
 				Subject: "Subject",
 				Message: "Message",
 			},
-			wantErr: nil,
+			wantErr:      nil,
+			wantStatus:   http.StatusOK,
+			wantResponse: "",
 		},
 		{
 			name:        "two fields",
@@ -48,17 +53,21 @@ func TestDecoder(t *testing.T) {
 				"to": "example@gmail.com",
 				"Subject": "Subject"
 			}`,
-			want:    nil,
-			wantErr: ErrNotAllFields,
+			want:         nil,
+			wantErr:      ErrNotAllFields,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "Not all fields in the request body are filled in\n",
 		},
 		{
-			name:        "empty body",
-			headerKey:   "Content-Type",
-			headerValue: "application/json",
-			key:         KeyForInstantSending,
-			mail:        ``,
-			want:        nil,
-			wantErr:     ErrEmptyBody,
+			name:         "empty body",
+			headerKey:    "Content-Type",
+			headerValue:  "application/json",
+			key:          KeyForInstantSending,
+			mail:         ``,
+			want:         nil,
+			wantErr:      ErrEmptyBody,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "Request body must not be empty\n",
 		},
 		{
 			name:        "non json header",
@@ -70,8 +79,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrHeaderNotJSON,
+			want:         nil,
+			wantErr:      ErrHeaderNotJSON,
+			wantStatus:   http.StatusUnsupportedMediaType,
+			wantResponse: "Content-Type must be application/json\n",
 		},
 		{
 			name:        "non content-type header",
@@ -83,8 +94,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrHeaderNotJSON,
+			want:         nil,
+			wantErr:      ErrHeaderNotJSON,
+			wantStatus:   http.StatusUnsupportedMediaType,
+			wantResponse: "Content-Type must be application/json\n",
 		},
 		{
 			name:        "empty header",
@@ -96,8 +109,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrHeaderNotJSON,
+			want:         nil,
+			wantErr:      ErrHeaderNotJSON,
+			wantStatus:   http.StatusUnsupportedMediaType,
+			wantResponse: "Content-Type must be application/json\n",
 		},
 		{
 			name:        "invalid type",
@@ -109,8 +124,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrInvalidType,
+			want:         nil,
+			wantErr:      ErrInvalidType,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "Request body contains an invalid value for the \"to\" field (at position 16)\n",
 		},
 		{
 			name:        "wrong syntax",
@@ -122,8 +139,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrSyntaxError,
+			want:         nil,
+			wantErr:      ErrSyntaxError,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "Request body contains badly-formed JSON (at position 7)\n",
 		},
 		{
 			name:        "unknown error",
@@ -136,8 +155,10 @@ func TestDecoder(t *testing.T) {
 				"message": "message", 
 				"": "empty field"
 			}`,
-			want:    nil,
-			wantErr: ErrUnknownError,
+			want:         nil,
+			wantErr:      ErrUnknownError,
+			wantStatus:   http.StatusInternalServerError,
+			wantResponse: "Internal Server Error\n",
 		},
 		{
 			name:        "no valid to",
@@ -149,8 +170,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "subject", 
 				"message": "message"
 			}`,
-			want:    nil,
-			wantErr: ErrNoValidRecipientAddress,
+			want:         nil,
+			wantErr:      ErrNoValidRecipientAddress,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "No valid recipient address found\n",
 		},
 		{
 			name:        "invalid key",
@@ -163,8 +186,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrUnknownKey,
+			want:         nil,
+			wantErr:      ErrUnknownKey,
+			wantStatus:   http.StatusInternalServerError,
+			wantResponse: "Internal Server Error\n",
 		},
 		{
 			name:        "success decoding with time",
@@ -185,7 +210,9 @@ func TestDecoder(t *testing.T) {
 					Message: "Message",
 				},
 			},
-			wantErr: nil,
+			wantErr:      nil,
+			wantStatus:   http.StatusOK,
+			wantResponse: "",
 		},
 		{
 			name:        "time not at future",
@@ -198,8 +225,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrTimeNotAtFuture,
+			want:         nil,
+			wantErr:      ErrTimeNotAtFuture,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "The specified time is not in the future\n",
 		},
 		{
 			name:        "no valid time field",
@@ -212,20 +241,10 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrNoValidTimeFiled,
-		},
-		{
-			name:        "two fields with time",
-			headerKey:   "Content-Type",
-			headerValue: "application/json",
-			key:         KeyForDelayedSending,
-			mail: `{
-				"To": "To",
-				"Subject": "Subject"
-			}`,
-			want:    nil,
-			wantErr: ErrNotAllFields,
+			want:         nil,
+			wantErr:      ErrNoValidTimeFiled,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "The specified time is not a valid\n",
 		},
 		{
 			name:        "invalid field time",
@@ -238,8 +257,25 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want:    nil,
-			wantErr: ErrInvalidType,
+			want:         nil,
+			wantErr:      ErrInvalidType,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "Request body contains an invalid value for the \"time\" field (at position 18)\n",
+		},
+		{
+			name:        "three fields with time",
+			headerKey:   "Content-Type",
+			headerValue: "application/json",
+			key:         KeyForDelayedSending,
+			mail: `{
+				"To": "To",
+				"Subject": "Subject",
+				"message": "Message"
+			}`,
+			want:         nil,
+			wantErr:      ErrNotAllFields,
+			wantStatus:   http.StatusBadRequest,
+			wantResponse: "Not all fields in the request body are filled in\n",
 		},
 	}
 
@@ -251,6 +287,14 @@ func TestDecoder(t *testing.T) {
 			r.Header.Set(tt.headerKey, tt.headerValue)
 
 			gotAny, err := DecodeEmailRequest(tt.key, w, r, zap.NewNop())
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("DecodeMailRequest(): status = %d, wantStatus = %d", w.Code, tt.wantStatus)
+			}
+
+			if w.Body.String() != tt.wantResponse {
+				t.Errorf("DecodeMailRequest(): response = %s, wantResponse = %s", w.Body.String(), tt.wantResponse)
+			}
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("DecodeMailRequest(): error = %v, wantErr = %v", err, tt.wantErr)
@@ -288,7 +332,7 @@ func TestDecoder(t *testing.T) {
 						return
 					}
 
-					if !reflect.DeepEqual(want, got) {
+					if !reflect.DeepEqual(got, want) {
 						t.Errorf("DecodeMailRequest(): got = %v, want = %v", got, tt.want)
 					}
 				}
