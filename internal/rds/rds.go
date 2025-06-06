@@ -65,11 +65,14 @@ func (rc *RedisClient) parseAndConvertTime(email *service.EmailWithTime) ([]byte
 		rc.logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
 		return nil, 0, err
 	}
+
 	email.Time = strconv.Itoa(int(UTCTime.Unix()))
+
 	jsonEmail, err := json.Marshal(email)
 	if err != nil {
 		rc.logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
 		return nil, 0, err
 	}
+
 	return jsonEmail, float64(UTCTime.Unix()), nil
 }
