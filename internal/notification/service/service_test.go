@@ -26,7 +26,7 @@ import (
 func TestSendMessage(t *testing.T) {
 	ctx := context.Background()
 
-	host, port, url := upMailHog(ctx, t)
+	host, port, mailHogPort, url := upMailHog(ctx, t)
 
 	tests := []struct {
 		name      string
@@ -99,7 +99,7 @@ func TestSendMessage(t *testing.T) {
 			assert.Equal(t, gotSubject, tt.wantEmail.Subject)
 			assert.Equal(t, gotMessage, tt.wantEmail.Message)
 
-			cleanMailHog(port, t)
+			cleanMailHog(mailHogPort, t)
 		})
 	}
 }
@@ -145,7 +145,7 @@ func parseMailHogResponse(url string, t *testing.T) (string, string, string, str
 	return from, to, subject, message
 }
 
-func upMailHog(ctx context.Context, t *testing.T) (string, int, string) {
+func upMailHog(ctx context.Context, t *testing.T) (string, int, string, string) {
 	t.Helper()
 
 	req := testcontainers.ContainerRequest{
@@ -169,6 +169,11 @@ func upMailHog(ctx context.Context, t *testing.T) (string, int, string) {
 		t.Fatalf("cannot get mapped port: %v", err)
 	}
 
+	mailHogPort, err := container.MappedPort(ctx, "8025/tcp")
+	if err != nil {
+		t.Fatalf("cannot get http port: %v", err)
+	}
+
 	httpPort, err := container.MappedPort(ctx, "8025/tcp")
 	if err != nil {
 		t.Fatalf("cannot get http port: %v", err)
@@ -181,13 +186,13 @@ func upMailHog(ctx context.Context, t *testing.T) (string, int, string) {
 		t.Fatalf("cannot get host: %v", err)
 	}
 
-	return host, port.Int(), url
+	return host, port.Int(), mailHogPort.Port(), url
 }
 
-func cleanMailHog(port int, t *testing.T) {
+func cleanMailHog(port string, t *testing.T) {
 	t.Helper()
 
-	url := fmt.Sprintf("http://localhost:%d/api/v1/messages", port)
+	url := fmt.Sprintf("http://localhost:%s/api/v1/messages", port)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		t.Fatalf("cleanMailHog: cannot create http request: %v", err)
