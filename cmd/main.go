@@ -41,7 +41,7 @@ func main() {
 	}
 	defer l.Sync()
 
-	rc, err := rds.New(ctx, cfg.Redis, l)
+	rc, err := rds.New(ctx, &cfg.Redis, l)
 	if err != nil {
 		l.Error("cannot initialize rds client", zap.Error(err))
 	}
@@ -87,6 +87,7 @@ func main() {
 	l.Info("stopping http server", zap.String("addr", srv.Addr))
 }
 
+// TODO: добавить в stage сборку прогон тестов
 // TODO: GitLab CI/CD
 // TODO: многопоточность
 // TODO: разобраться с отменой на клиентской стороне

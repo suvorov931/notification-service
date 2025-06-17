@@ -7,10 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
-	"syscall"
 	"testing"
 	"time"
 
@@ -23,30 +19,17 @@ import (
 // TODO: новые тестовые кейсы
 // TODO: обработка всех ошибок
 // TODO: добавить кастомных внятных ошибок и проверить их
+// TODO: поддержка рюка
 
 // TODO: тесты для sendWithRetry
 
 func TestSendMessage(t *testing.T) {
-	ctx, cancel := signal.NotifyContext(context.Background(),
-		os.Interrupt,
-		syscall.SIGTERM,
-		syscall.SIGQUIT,
-	)
-	defer cancel()
+	ctx := context.Background()
 
-	container := upMailHog(ctx, t)
-	go func() {
-		<-ctx.Done()
-		downMailHog(container, t)
-		return
-	}()
-	defer downMailHog(container, t)
-
-	port, httpPort, url := getMailHogPorts(ctx, container, t)
+	host, port, url := upMailHog(ctx, t)
 
 	tests := []struct {
 		name      string
-		port      int
 		from      string
 		wantFrom  string
 		email     *Email
@@ -55,7 +38,6 @@ func TestSendMessage(t *testing.T) {
 	}{
 		{
 			name:     "successful send",
-			port:     port,
 			from:     "something@gmail.com",
 			wantFrom: "something@gmail.com",
 			email: &Email{
@@ -96,7 +78,7 @@ func TestSendMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := New(&MailSender{
 				SenderEmail: tt.from,
-				SMTPHost:    "localhost",
+				SMTPHost:    host,
 				SMTPPort:    port,
 			}, zap.NewNop())
 			err := srv.SendMessage(ctx, *tt.email)
@@ -132,29 +114,6 @@ type mailHogResponse struct {
 	} `json:"items"`
 }
 
-func getMailHogPorts(ctx context.Context, container testcontainers.Container, t *testing.T) (int, string, string) {
-	t.Helper()
-
-	stmpPort, err := container.MappedPort(ctx, "1025/tcp")
-	if err != nil {
-		t.Fatalf("cannot get  mapped port: %v", err)
-	}
-
-	httpPort, err := container.MappedPort(ctx, "8025/tcp")
-	if err != nil {
-		t.Fatalf("cannot get http port: %v", err)
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
-
-	port, err := strconv.Atoi(stmpPort.Port())
-	if err != nil {
-		t.Fatalf("cannot convert mapped port: %v", err)
-	}
-
-	return port, httpPort.Port(), url
-}
-
 func parseMailHogResponse(url string, t *testing.T) (string, string, string, string) {
 	t.Helper()
 
@@ -186,12 +145,8 @@ func parseMailHogResponse(url string, t *testing.T) (string, string, string, str
 	return from, to, subject, message
 }
 
-func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
+func upMailHog(ctx context.Context, t *testing.T) (string, int, string) {
 	t.Helper()
-
-	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
-		t.Fatalf("cannot disable ryuk")
-	}
 
 	req := testcontainers.ContainerRequest{
 		Name:         "mailhog-for-tests",
@@ -209,36 +164,22 @@ func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
 		t.Fatalf("Failed to start container %v", err)
 	}
 
-	return container
-}
-
-func downMailHog(container testcontainers.Container, t *testing.T) {
-	t.Helper()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if err := container.Terminate(ctx); err != nil {
-		t.Errorf("cannot terminate container: %v", err)
-	}
-}
-
-func cleanMailHog(port string, t *testing.T) {
-	t.Helper()
-
-	url := fmt.Sprintf("http://localhost:%s/api/v1/messages", port)
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	port, err := container.MappedPort(ctx, "1025/tcp")
 	if err != nil {
-		t.Fatalf("cleanMailHog: cannot create http request: %v", err)
+		t.Fatalf("cannot get mapped port: %v", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	httpPort, err := container.MappedPort(ctx, "8025/tcp")
 	if err != nil {
-		t.Fatalf("cleanMailHog: cannot execute http request: %v", err)
+		t.Fatalf("cannot get http port: %v", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("cleanMailHog: status code not ok: %v", resp.StatusCode)
+	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		t.Fatalf("cannot get host: %v", err)
 	}
+
+	return host, port.Int(), url
 }

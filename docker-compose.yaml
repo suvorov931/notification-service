@@ -13,3 +13,4 @@ services:
     image: redis:8.0
     ports:
       - "6379:6379"
+    command: redis-server --requirepass 12345

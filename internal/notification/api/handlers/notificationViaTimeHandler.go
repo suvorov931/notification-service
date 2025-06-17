@@ -7,6 +7,7 @@ import (
 
 	"notification/internal/notification/api"
 	"notification/internal/notification/api/decoder"
+	"notification/internal/notification/service"
 	rds2 "notification/internal/rds"
 )
 
@@ -32,7 +33,7 @@ func NewSendNotificationViaTimeHandler(l *zap.Logger, rc rds2.RedisClient) http.
 			l.Warn("NewSendNotificationViaTimeHandler: ResponseWriter does not support flushing")
 		}
 
-		if err = rc.AddDelayedEmail(ctx, email); err != nil {
+		if err = rc.AddDelayedEmail(ctx, email.(*service.EmailWithTime)); err != nil {
 			return
 		}
 
