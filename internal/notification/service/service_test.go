@@ -19,8 +19,6 @@ import (
 // TODO: новые тестовые кейсы
 // TODO: обработка всех ошибок
 // TODO: добавить кастомных внятных ошибок и проверить их
-// TODO: поддержка рюка
-
 // TODO: тесты для sendWithRetry
 
 func TestSendMessage(t *testing.T) {
@@ -166,25 +164,20 @@ func upMailHog(ctx context.Context, t *testing.T) (string, int, string, string) 
 
 	port, err := container.MappedPort(ctx, "1025/tcp")
 	if err != nil {
-		t.Fatalf("cannot get mapped port: %v", err)
+		t.Fatalf("cannot get port: %v", err)
 	}
-
-	mailHogPort, err := container.MappedPort(ctx, "8025/tcp")
-	if err != nil {
-		t.Fatalf("cannot get http port: %v", err)
-	}
-
-	httpPort, err := container.MappedPort(ctx, "8025/tcp")
-	if err != nil {
-		t.Fatalf("cannot get http port: %v", err)
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		t.Fatalf("cannot get host: %v", err)
 	}
+
+	mailHogPort, err := container.MappedPort(ctx, "8025/tcp")
+	if err != nil {
+		t.Fatalf("cannot get mailHog port: %v", err)
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", mailHogPort.Port())
 
 	return host, port.Int(), mailHogPort.Port(), url
 }
