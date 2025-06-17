@@ -99,7 +99,7 @@ func TestSendMessage(t *testing.T) {
 			assert.Equal(t, gotSubject, tt.wantEmail.Subject)
 			assert.Equal(t, gotMessage, tt.wantEmail.Message)
 
-			cleanMailHog(httpPort, t)
+			cleanMailHog(port, t)
 		})
 	}
 }
@@ -182,4 +182,24 @@ func upMailHog(ctx context.Context, t *testing.T) (string, int, string) {
 	}
 
 	return host, port.Int(), url
+}
+
+func cleanMailHog(port int, t *testing.T) {
+	t.Helper()
+
+	url := fmt.Sprintf("http://localhost:%d/api/v1/messages", port)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		t.Fatalf("cleanMailHog: cannot create http request: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("cleanMailHog: cannot execute http request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("cleanMailHog: status code not ok: %v", resp.StatusCode)
+	}
 }
