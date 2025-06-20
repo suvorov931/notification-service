@@ -87,6 +87,8 @@ func main() {
 	l.Info("stopping http server", zap.String("addr", srv.Addr))
 }
 
+// TODO: везде переехать на testify!!!
+
 // TODO: добавить в stage сборку прогон тестов
 // TODO: GitLab CI/CD
 // TODO: многопоточность

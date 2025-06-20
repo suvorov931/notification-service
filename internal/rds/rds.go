@@ -61,6 +61,19 @@ func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.Email
 	return nil
 }
 
+func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
+	res, err := rc.client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+		Min: strconv.Itoa(int(time.Now().Unix())),
+		Max: strconv.Itoa(int(time.Now().Unix())),
+	}).Result()
+	if err != nil {
+		rc.logger.Error("CheckRedis: cannot get entry", zap.Error(err))
+		return nil, err
+	}
+
+	return res, nil
+}
+
 func (rc *RedisClient) parseAndConvertTime(email *service.EmailWithTime) ([]byte, float64, error) {
 	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.UTC)
 	if err != nil {
