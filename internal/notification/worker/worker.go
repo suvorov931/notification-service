@@ -2,20 +2,18 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"notification/internal/notification/service"
+	"notification/internal/rds"
 )
 
 const basicTimePeriodForWorker = 1 * time.Second
 
-func Worker(ctx context.Context, logger *zap.Logger) {
+func Worker(ctx context.Context, rc *rds.RedisClient, logger *zap.Logger) {
 	ticker := time.NewTicker(basicTimePeriodForWorker)
 	defer ticker.Stop()
 
@@ -25,45 +23,19 @@ func Worker(ctx context.Context, logger *zap.Logger) {
 			logger.Info("Worker: context canceled")
 			return
 		case <-ticker.C:
-			CheckRedis
+			entry, err := rc.CheckRedis(ctx)
+			if err != nil {
+				//return err
+			}
+			fmt.Println(entry)
+
 		}
 	}
 }
 
-func orker(ctx context.Context, rds *redis.Client) []service.Email {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			res, err := rds.ZRangeByScore(ctx, "delayed-send", &redis.ZRangeBy{
-				Min: "0",
-				Max: strconv.Itoa(int(time.Now().Unix() + 10)),
-			}).Result()
-			if err != nil {
-				fmt.Println(err.Error())
-			}
-			for _, r := range res {
-				fmt.Println(r)
-			}
-			var result []service.Email
-			for _, v := range res {
-				var r service.Email
-				err = json.Unmarshal([]byte(v), &r)
-				if err != nil {
-					fmt.Println(err.Error())
-				}
-				result = append(result, r)
-			}
-			if len(res) != 0 {
-				if err = rds.ZRem(ctx, "delayed-send", res).Err(); err != nil {
-					fmt.Println(err)
-				}
-			}
-			fmt.Println("end")
-			return result
-		}
-	}
+func parseEntry(ctx context.Context, entry []string, sender service.EmailSender) {
+	//for _, r := range entry {
+	//	sender.SendMessage(ctx)
+	//	service.EmailSender(context.Background(), r)
+	//}
 }

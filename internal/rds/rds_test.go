@@ -34,7 +34,7 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	rc, err := New(ctx, cfg, zap.NewNop())
 	if err != nil {
-		t.Errorf("cannot initialize client: %v", err)
+		t.Errorf("cannot initialize Client: %v", err)
 	}
 
 	tests := []struct {
@@ -65,7 +65,7 @@ func TestAddDelayedEmail(t *testing.T) {
 				t.Errorf("AddDelayedEmail() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			email, err := rc.client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+			email, err := rc.Client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 				Min: tt.email.Time,
 				Max: tt.email.Time,
 			}).Result()
@@ -94,7 +94,7 @@ func TestCheckRedis(t *testing.T) {
 
 	rc, err := New(ctx, cfg, zap.NewNop())
 	if err != nil {
-		t.Errorf("cannot initialize client: %v", err)
+		t.Errorf("cannot initialize Client: %v", err)
 	}
 
 	tests := []struct {
@@ -142,7 +142,7 @@ func TestCheckRedis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = rc.client.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
+			err = rc.Client.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
 			require.NoError(t, err)
 
 			res, err := rc.CheckRedis(ctx)
@@ -150,7 +150,7 @@ func TestCheckRedis(t *testing.T) {
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.want, res)
 
-			tt.delFunc(*rc.client)
+			tt.delFunc(*rc.Client)
 		})
 	}
 }

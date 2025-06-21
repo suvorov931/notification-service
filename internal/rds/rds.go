@@ -23,8 +23,8 @@ type Config struct {
 }
 
 type RedisClient struct {
-	client *redis.Client
-	logger *zap.Logger
+	Client *redis.Client
+	Logger *zap.Logger
 }
 
 func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisClient, error) {
@@ -39,35 +39,35 @@ func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisClient, er
 		return nil, err
 	}
 
-	return &RedisClient{client: cl, logger: logger}, nil
+	return &RedisClient{Client: cl, Logger: logger}, nil
 }
 
 func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.EmailWithTime) error {
 	emailJSON, scr, err := rc.parseAndConvertTime(email)
 	if err != nil {
-		rc.logger.Error(err.Error())
+		rc.Logger.Error(err.Error())
 
 		return err
 	}
 
-	err = rc.client.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+	err = rc.Client.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 		Score:  scr,
 		Member: emailJSON,
 	}).Err()
 	if err != nil {
-		rc.logger.Error("AddDelayedEmail: cannot save email in redis", zap.Error(err))
+		rc.Logger.Error("AddDelayedEmail: cannot save email in redis", zap.Error(err))
 	}
 
 	return nil
 }
 
 func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
-	res, err := rc.client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+	res, err := rc.Client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 		Min: strconv.Itoa(int(time.Now().Unix())),
 		Max: strconv.Itoa(int(time.Now().Unix())),
 	}).Result()
 	if err != nil {
-		rc.logger.Error("CheckRedis: cannot get entry", zap.Error(err))
+		rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
 		return nil, err
 	}
 
@@ -77,7 +77,7 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 func (rc *RedisClient) parseAndConvertTime(email *service.EmailWithTime) ([]byte, float64, error) {
 	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.UTC)
 	if err != nil {
-		rc.logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
+		rc.Logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
 
 		return nil, 0, err
 	}
@@ -86,7 +86,7 @@ func (rc *RedisClient) parseAndConvertTime(email *service.EmailWithTime) ([]byte
 
 	jsonEmail, err := json.Marshal(email)
 	if err != nil {
-		rc.logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
+		rc.Logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
 
 		return nil, 0, err
 	}

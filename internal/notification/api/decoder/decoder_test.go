@@ -1,13 +1,12 @@
 package decoder
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"notification/internal/notification/api"
@@ -289,53 +288,23 @@ func TestDecoder(t *testing.T) {
 
 			gotAny, err := DecodeEmailRequest(tt.key, w, r, zap.NewNop())
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("DecodeMailRequest(): status = %d, wantStatus = %d", w.Code, tt.wantStatus)
-			}
-
-			if w.Body.String() != tt.wantResponse {
-				t.Errorf("DecodeMailRequest(): response = %s, wantResponse = %s", w.Body.String(), tt.wantResponse)
-			}
-
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("DecodeMailRequest(): error = %v, wantErr = %v", err, tt.wantErr)
-			}
+			assert.Equal(t, w.Code, tt.wantStatus)
+			assert.Equal(t, w.Body.String(), tt.wantResponse)
+			assert.ErrorIs(t, err, tt.wantErr)
 
 			if err == nil {
 				switch tt.key {
 				case api.KeyForInstantSending:
-					got, ok := gotAny.(*service.Email)
-					if !ok {
-						t.Errorf("DecodeMailRequest(): expected *service.Email, got %T", gotAny)
-						return
-					}
+					got := gotAny.(*service.Email)
+					want := tt.want.(*service.Email)
 
-					want, ok := tt.want.(*service.Email)
-					if !ok {
-						t.Errorf("Test setup error: want is not *service.Email, got %T", tt.want)
-						return
-					}
-
-					if !reflect.DeepEqual(want, got) {
-						t.Errorf("DecodeMailRequest(): got = %v, want = %v", got, tt.want)
-					}
+					assert.Equal(t, want, got)
 
 				case api.KeyForDelayedSending:
-					got, ok := gotAny.(*service.EmailWithTime)
-					if !ok {
-						t.Errorf("DecodeMailRequest(): expected *service.EmailWithTime, got %T", gotAny)
-						return
-					}
+					got := gotAny.(*service.EmailWithTime)
+					want := tt.want.(*service.EmailWithTime)
 
-					want, ok := tt.want.(*service.EmailWithTime)
-					if !ok {
-						t.Errorf("Test setup error: want is not *service.EmailWithTime, got %T", tt.want)
-						return
-					}
-
-					if !reflect.DeepEqual(got, want) {
-						t.Errorf("DecodeMailRequest(): got = %v, want = %v", got, tt.want)
-					}
+					assert.Equal(t, want, got)
 				}
 			}
 		})
