@@ -71,11 +71,18 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
+	if len(res) != 0 {
+		err = rc.Client.ZRem(ctx, api.KeyForDelayedSending, res).Err()
+		if err != nil {
+			rc.Logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
+		}
+	}
+
 	return res, nil
 }
 
 func (rc *RedisClient) parseAndConvertTime(email *service.EmailWithTime) ([]byte, float64, error) {
-	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.UTC)
+	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.Local)
 	if err != nil {
 		rc.Logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
 

@@ -8,12 +8,12 @@ import (
 	"notification/internal/notification/api"
 	"notification/internal/notification/api/decoder"
 	"notification/internal/notification/service"
-	rds2 "notification/internal/rds"
+	"notification/internal/rds"
 )
 
 // TODO: добавить отмену по контексту
 
-func NewSendNotificationViaTimeHandler(l *zap.Logger, rc rds2.RedisClient) http.HandlerFunc {
+func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 

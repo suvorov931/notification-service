@@ -19,6 +19,7 @@ import (
 	"notification/internal/logger"
 	"notification/internal/notification/api/handlers"
 	"notification/internal/notification/service"
+	"notification/internal/notification/worker"
 	"notification/internal/rds"
 )
 
@@ -43,10 +44,19 @@ func main() {
 
 	rc, err := rds.New(ctx, &cfg.Redis, l)
 	if err != nil {
-		l.Error("cannot initialize rds client", zap.Error(err))
+		l.Fatal("cannot initialize rds client", zap.Error(err))
 	}
 
-	s := service.New(&cfg.CredentialsSender, l)
+	s := service.New(&cfg.MailSender, l)
+
+	w := worker.New(l, rc, s)
+
+	go func() {
+		err = w.Run(ctx)
+		if err != nil {
+			l.Error("failed in the worker's work", zap.Error(err))
+		}
+	}()
 
 	router := chi.NewRouter()
 
@@ -57,7 +67,7 @@ func main() {
 	router.Use(middleware.URLFormat)
 
 	router.Post("/send-notification", handlers.NewSendNotificationHandler(l, s))
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(l, *rc))
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(l, rc))
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),
@@ -93,7 +103,6 @@ func main() {
 // TODO: GitLab CI/CD
 // TODO: многопоточность
 // TODO: разобраться с отменой на клиентской стороне
-// TODO: реализовать функцию для отправки сообщений через время
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?
 
 //curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \

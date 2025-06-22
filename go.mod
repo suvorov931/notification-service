@@ -3,12 +3,13 @@ module notification
 go 1.24.3
 
 require (
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/redis/go-redis/v9 v9.10.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 )
 
