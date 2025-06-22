@@ -7,12 +7,13 @@ import (
 
 	"notification/internal/notification/api"
 	"notification/internal/notification/api/decoder"
-	rds2 "notification/internal/rds"
+	"notification/internal/notification/service"
+	"notification/internal/rds"
 )
 
 // TODO: добавить отмену по контексту
 
-func NewSendNotificationViaTimeHandler(l *zap.Logger, rc rds2.RedisClient) http.HandlerFunc {
+func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -32,7 +33,7 @@ func NewSendNotificationViaTimeHandler(l *zap.Logger, rc rds2.RedisClient) http.
 			l.Warn("NewSendNotificationViaTimeHandler: ResponseWriter does not support flushing")
 		}
 
-		if err = rc.AddDelayedEmail(ctx, email); err != nil {
+		if err = rc.AddDelayedEmail(ctx, email.(*service.EmailWithTime)); err != nil {
 			return
 		}
 

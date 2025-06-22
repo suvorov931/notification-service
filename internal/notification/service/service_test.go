@@ -7,10 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
-	"syscall"
 	"testing"
 	"time"
 
@@ -20,33 +16,19 @@ import (
 	"go.uber.org/zap"
 )
 
+// TODO: переехать на testify
 // TODO: новые тестовые кейсы
 // TODO: обработка всех ошибок
 // TODO: добавить кастомных внятных ошибок и проверить их
-
 // TODO: тесты для sendWithRetry
 
 func TestSendMessage(t *testing.T) {
-	ctx, cancel := signal.NotifyContext(context.Background(),
-		os.Interrupt,
-		syscall.SIGTERM,
-		syscall.SIGQUIT,
-	)
-	defer cancel()
+	ctx := context.Background()
 
-	container := upMailHog(ctx, t)
-	go func() {
-		<-ctx.Done()
-		downMailHog(container, t)
-		return
-	}()
-	defer downMailHog(container, t)
-
-	port, httpPort, url := getMailHogPorts(ctx, container, t)
+	host, port, mailHogPort, url := upMailHog(ctx, t)
 
 	tests := []struct {
 		name      string
-		port      int
 		from      string
 		wantFrom  string
 		email     *Email
@@ -55,7 +37,6 @@ func TestSendMessage(t *testing.T) {
 	}{
 		{
 			name:     "successful send",
-			port:     port,
 			from:     "something@gmail.com",
 			wantFrom: "something@gmail.com",
 			email: &Email{
@@ -96,7 +77,7 @@ func TestSendMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := New(&MailSender{
 				SenderEmail: tt.from,
-				SMTPHost:    "localhost",
+				SMTPHost:    host,
 				SMTPPort:    port,
 			}, zap.NewNop())
 			err := srv.SendMessage(ctx, *tt.email)
@@ -117,7 +98,7 @@ func TestSendMessage(t *testing.T) {
 			assert.Equal(t, gotSubject, tt.wantEmail.Subject)
 			assert.Equal(t, gotMessage, tt.wantEmail.Message)
 
-			cleanMailHog(httpPort, t)
+			cleanMailHog(mailHogPort, t)
 		})
 	}
 }
@@ -130,29 +111,6 @@ type mailHogResponse struct {
 			Headers map[string][]string `json:"headers"`
 		} `json:"content"`
 	} `json:"items"`
-}
-
-func getMailHogPorts(ctx context.Context, container testcontainers.Container, t *testing.T) (int, string, string) {
-	t.Helper()
-
-	stmpPort, err := container.MappedPort(ctx, "1025/tcp")
-	if err != nil {
-		t.Fatalf("cannot get  mapped port: %v", err)
-	}
-
-	httpPort, err := container.MappedPort(ctx, "8025/tcp")
-	if err != nil {
-		t.Fatalf("cannot get http port: %v", err)
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", httpPort.Port())
-
-	port, err := strconv.Atoi(stmpPort.Port())
-	if err != nil {
-		t.Fatalf("cannot convert mapped port: %v", err)
-	}
-
-	return port, httpPort.Port(), url
 }
 
 func parseMailHogResponse(url string, t *testing.T) (string, string, string, string) {
@@ -186,12 +144,8 @@ func parseMailHogResponse(url string, t *testing.T) (string, string, string, str
 	return from, to, subject, message
 }
 
-func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
+func upMailHog(ctx context.Context, t *testing.T) (string, int, string, string) {
 	t.Helper()
-
-	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
-		t.Fatalf("cannot disable ryuk")
-	}
 
 	req := testcontainers.ContainerRequest{
 		Name:         "mailhog-for-tests",
@@ -209,18 +163,24 @@ func upMailHog(ctx context.Context, t *testing.T) testcontainers.Container {
 		t.Fatalf("Failed to start container %v", err)
 	}
 
-	return container
-}
-
-func downMailHog(container testcontainers.Container, t *testing.T) {
-	t.Helper()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if err := container.Terminate(ctx); err != nil {
-		t.Errorf("cannot terminate container: %v", err)
+	port, err := container.MappedPort(ctx, "1025/tcp")
+	if err != nil {
+		t.Fatalf("cannot get port: %v", err)
 	}
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		t.Fatalf("cannot get host: %v", err)
+	}
+
+	mailHogPort, err := container.MappedPort(ctx, "8025/tcp")
+	if err != nil {
+		t.Fatalf("cannot get mailHog port: %v", err)
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/api/v2/messages", mailHogPort.Port())
+
+	return host, port.Int(), mailHogPort.Port(), url
 }
 
 func cleanMailHog(port string, t *testing.T) {
