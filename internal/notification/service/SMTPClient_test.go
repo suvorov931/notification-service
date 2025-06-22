@@ -63,7 +63,7 @@ func TestSendMessage(t *testing.T) {
 			BasicRetryPause: 1,
 		}, zap.NewNop())
 
-		err := srv.SendMessage(ctx, Email{
+		err := srv.SendEmail(ctx, Email{
 			To:      "daanisimov04@gmail.com",
 			Subject: "hi",
 			Message: "hello from go test",
@@ -80,7 +80,7 @@ func TestSendMessage(t *testing.T) {
 				SMTPHost:    host,
 				SMTPPort:    port,
 			}, zap.NewNop())
-			err := srv.SendMessage(ctx, *tt.email)
+			err := srv.SendEmail(ctx, *tt.email)
 			time.Sleep(time.Second)
 
 			if err != nil {

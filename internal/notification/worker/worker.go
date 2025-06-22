@@ -81,14 +81,14 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 		default:
 
-			var res service.EmailWithTime
+			var res service.EmailMessageWithTime
 
 			if err := json.Unmarshal([]byte(entry), &res); err != nil {
 				w.logger.Error("parseAndSendEntry: failed to unmarshal entry", zap.Error(err), zap.String("entry", entry))
 				continue
 			}
 
-			if err := w.sender.SendMessage(ctx, res.Email); err != nil {
+			if err := w.sender.SendEmail(ctx, res.Email); err != nil {
 				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", res.Email))
 				continue
 			}

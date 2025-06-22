@@ -47,7 +47,7 @@ func main() {
 		l.Fatal("cannot initialize rds client", zap.Error(err))
 	}
 
-	s := service.New(&cfg.MailSender, l)
+	s := service.New(&cfg.SMTP, l)
 
 	w := worker.New(l, rc, s)
 

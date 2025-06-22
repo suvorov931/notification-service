@@ -12,7 +12,7 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
+func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	select {
 	case <-ctx.Done():
 		s.logger.Error("SendMessage: context canceled", zap.Error(ctx.Err()))
@@ -57,7 +57,7 @@ func (s *EmailService) SendMessage(ctx context.Context, email Email) error {
 	return nil
 }
 
-func (s *EmailService) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, msg *gomail.Message) error {
+func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, msg *gomail.Message) error {
 	var lastErr error
 
 	for i := 0; i < s.config.MaxRetries+1; i++ {

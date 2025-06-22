@@ -202,7 +202,7 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: &service.EmailWithTime{
+			want: &service.EmailMessageWithTime{
 				Time: "2035-05-24 00:33:10",
 				Email: service.Email{
 					To:      "example@gmail.com",
@@ -301,8 +301,8 @@ func TestDecoder(t *testing.T) {
 					assert.Equal(t, want, got)
 
 				case api.KeyForDelayedSending:
-					got := gotAny.(*service.EmailWithTime)
-					want := tt.want.(*service.EmailWithTime)
+					got := gotAny.(*service.EmailMessageWithTime)
+					want := tt.want.(*service.EmailMessageWithTime)
 
 					assert.Equal(t, want, got)
 				}

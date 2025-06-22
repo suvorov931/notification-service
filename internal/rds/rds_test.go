@@ -39,13 +39,13 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		email     *service.EmailWithTime
+		email     *service.EmailMessageWithTime
 		wantEmail []string
 		wantErr   error
 	}{
 		{
 			name: "success add",
-			email: &service.EmailWithTime{
+			email: &service.EmailMessageWithTime{
 				Time: "2025-12-02 15:04:05",
 				Email: service.Email{
 					To:      "daanisimov04@gmail.com",

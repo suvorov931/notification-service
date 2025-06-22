@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type MailSender struct {
+type Config struct {
 	SenderEmail     string `yaml:"SENDER_EMAIL" env:"SENDER_EMAIL"`
 	SenderPassword  string `yaml:"SENDER_PASSWORD" env:"SENDER_PASSWORD"`
 	SMTPHost        string `yaml:"SMTP_HOST" env:"SMTP_HOST"`
@@ -16,35 +16,35 @@ type MailSender struct {
 	BasicRetryPause int    `yaml:"BASIC_RETRY_PAUSE" env:"BASIC_RETRY_PAUSE" env-default:"5"`
 }
 
-type Email struct {
+type EmailMessage struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`
 }
 
-type TempEmailWithTime struct {
+type TempEmailMessageWithTime struct {
 	Time    string `json:"time"`
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`
 }
 
-type EmailWithTime struct {
+type EmailMessageWithTime struct {
 	Time  string
-	Email Email
+	Email EmailMessage
 }
 
-type EmailService struct {
-	config *MailSender
+type SMTPClient struct {
+	config *Config
 	logger *zap.Logger
 }
 
 type EmailSender interface {
-	SendMessage(ctx context.Context, email Email) error
+	SendEmail(ctx context.Context, email EmailMessage) error
 }
 
-func New(config *MailSender, logger *zap.Logger) *EmailService {
-	return &EmailService{
+func New(config *Config, logger *zap.Logger) *SMTPClient {
+	return &SMTPClient{
 		config: config,
 		logger: logger,
 	}

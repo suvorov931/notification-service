@@ -33,7 +33,7 @@ func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisClient) http.
 			l.Warn("NewSendNotificationViaTimeHandler: ResponseWriter does not support flushing")
 		}
 
-		if err = rc.AddDelayedEmail(ctx, email.(*service.EmailWithTime)); err != nil {
+		if err = rc.AddDelayedEmail(ctx, email.(*service.EmailMessageWithTime)); err != nil {
 			return
 		}
 

@@ -42,7 +42,7 @@ func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisClient, er
 	return &RedisClient{Client: cl, Logger: logger}, nil
 }
 
-func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.EmailWithTime) error {
+func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.EmailMessageWithTime) error {
 	emailJSON, scr, err := rc.parseAndConvertTime(email)
 	if err != nil {
 		rc.Logger.Error(err.Error())
@@ -81,7 +81,7 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-func (rc *RedisClient) parseAndConvertTime(email *service.EmailWithTime) ([]byte, float64, error) {
+func (rc *RedisClient) parseAndConvertTime(email *service.EmailMessageWithTime) ([]byte, float64, error) {
 	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.Local)
 	if err != nil {
 		rc.Logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))

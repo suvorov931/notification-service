@@ -32,7 +32,7 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.
 			l.Warn("NewSendNotificationHandler: ResponseWriter does not support flushing")
 		}
 
-		err = sender.SendMessage(ctx, *email.(*service.Email))
+		err = sender.SendEmail(ctx, *email.(*service.EmailMessage))
 		if err != nil {
 			if errors.Is(ctx.Err(), context.Canceled) {
 				l.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))

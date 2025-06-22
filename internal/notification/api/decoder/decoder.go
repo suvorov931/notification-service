@@ -76,9 +76,9 @@ func (d *decoder) createEmailModel(key string) (any, error) {
 	var email any
 	switch key {
 	case api.KeyForInstantSending:
-		email = &service.Email{}
+		email = &service.EmailMessage{}
 	case api.KeyForDelayedSending:
-		email = &service.TempEmailWithTime{}
+		email = &service.TempEmailMessageWithTime{}
 	default:
 		http.Error(d.w, http.StatusText(500), http.StatusInternalServerError)
 
@@ -149,7 +149,7 @@ func (d *decoder) errDuringParse(err error) error {
 
 func (d *decoder) checkFields(email any) (any, error) {
 	switch t := email.(type) {
-	case *service.Email:
+	case *service.EmailMessage:
 		if t.To == "" || t.Message == "" || t.Subject == "" {
 			d.logger.Error(ErrNotAllFields.Error())
 			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
@@ -166,7 +166,7 @@ func (d *decoder) checkFields(email any) (any, error) {
 
 		return email, nil
 
-	case *service.TempEmailWithTime:
+	case *service.TempEmailMessageWithTime:
 		if t.Time == "" || t.To == "" || t.Message == "" || t.Subject == "" {
 			d.logger.Error(ErrNotAllFields.Error())
 			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
@@ -185,9 +185,9 @@ func (d *decoder) checkFields(email any) (any, error) {
 			return nil, ErrNoValidRecipientAddress
 		}
 
-		res := service.EmailWithTime{
+		res := service.EmailMessageWithTime{
 			Time: t.Time,
-			Email: service.Email{
+			Email: service.EmailMessage{
 				To:      t.To,
 				Subject: t.Subject,
 				Message: t.Message,

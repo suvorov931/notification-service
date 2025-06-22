@@ -12,10 +12,10 @@ import (
 )
 
 type Config struct {
-	HttpServer api.HttpServer     `yaml:"HTTP_SERVER" env:"HTTP_SERVER"`
-	MailSender service.MailSender `yaml:"MAIL_SENDER" env:"MAIL_SENDER"`
-	Redis      rds.Config         `yaml:"REDIS" env:"REDIS"`
-	Logger     logger.Config      `yaml:"LOGGER" env:"LOGGER"`
+	HttpServer api.HttpServer `yaml:"HTTP_SERVER" env:"HTTP_SERVER"`
+	SMTP       service.Config `yaml:"SMTP" env:"SMTP"`
+	Redis      rds.Config     `yaml:"REDIS" env:"REDIS"`
+	Logger     logger.Config  `yaml:"LOGGER" env:"LOGGER"`
 }
 
 func New() (*Config, error) {
