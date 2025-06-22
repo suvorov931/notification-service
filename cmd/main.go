@@ -97,12 +97,15 @@ func main() {
 	l.Info("stopping http server", zap.String("addr", srv.Addr))
 }
 
-// TODO: везде переехать на testify!!!
-
+// TODO: отрефакторить названия (особенно в пакете service)
+// TODO: покрыть тестами ВСЁ
+// TODO: дополнить README, написать документацию
 // TODO: добавить в stage сборку прогон тестов
 // TODO: GitLab CI/CD
-// TODO: многопоточность
 // TODO: разобраться с отменой на клиентской стороне
+
+// TODO: мониторинг, nginx, kafka
+// TODO: многопоточность
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?
 
 //curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \
