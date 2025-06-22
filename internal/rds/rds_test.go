@@ -3,7 +3,6 @@ package rds
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 	"time"
 
@@ -20,8 +19,6 @@ import (
 
 const passForRedisTestContainer = "something password"
 
-// TODO: проверить аутентификацию для редиса (NOAUTH, WRONGPASS)?
-
 func TestAddDelayedEmail(t *testing.T) {
 	ctx := context.Background()
 
@@ -33,9 +30,7 @@ func TestAddDelayedEmail(t *testing.T) {
 	}
 
 	rc, err := New(ctx, cfg, zap.NewNop())
-	if err != nil {
-		t.Errorf("cannot initialize Client: %v", err)
-	}
+	require.NoError(t, err)
 
 	tests := []struct {
 		name      string
@@ -47,7 +42,7 @@ func TestAddDelayedEmail(t *testing.T) {
 			name: "success add",
 			email: &service.EmailMessageWithTime{
 				Time: "2025-12-02 15:04:05",
-				Email: service.Email{
+				Email: service.EmailMessage{
 					To:      "daanisimov04@gmail.com",
 					Subject: "subject",
 					Message: "message",
@@ -69,14 +64,9 @@ func TestAddDelayedEmail(t *testing.T) {
 				Min: tt.email.Time,
 				Max: tt.email.Time,
 			}).Result()
-			if err != nil {
-				t.Errorf("cannot get member: %v", err)
-			}
+			require.NoError(t, err)
 
-			if !reflect.DeepEqual(email, tt.wantEmail) {
-				t.Errorf("AddDelayedEmail(): email = %v, wantEmail = %s", email, tt.wantEmail)
-			}
-
+			assert.Equal(t, tt.wantEmail, email)
 		})
 	}
 
@@ -93,9 +83,7 @@ func TestCheckRedis(t *testing.T) {
 	}
 
 	rc, err := New(ctx, cfg, zap.NewNop())
-	if err != nil {
-		t.Errorf("cannot initialize Client: %v", err)
-	}
+	require.NoError(t, err)
 
 	tests := []struct {
 		name    string
@@ -155,6 +143,14 @@ func TestCheckRedis(t *testing.T) {
 	}
 }
 
+func TestFailedConnection(t *testing.T) {
+	ctx := context.Background()
+	cfg := &Config{Addr: "localhost:1234", Password: "wrong"}
+
+	_, err := New(ctx, cfg, zap.NewNop())
+	require.Error(t, err)
+}
+
 func upRedis(ctx context.Context, containerName string, t *testing.T) string {
 	t.Helper()
 
@@ -171,14 +167,10 @@ func upRedis(ctx context.Context, containerName string, t *testing.T) string {
 		Started:          true,
 		Reuse:            false,
 	})
-	if err != nil {
-		t.Fatalf("failed to start container %v", err)
-	}
+	require.NoError(t, err)
 
 	port, err := container.MappedPort(ctx, "6379")
-	if err != nil {
-		t.Fatalf("cannot get port: %v", err)
-	}
+	require.NoError(t, err)
 
 	return "localhost:" + port.Port()
 }

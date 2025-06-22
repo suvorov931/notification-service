@@ -3,6 +3,7 @@ package rds
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -12,8 +13,6 @@ import (
 	"notification/internal/notification/api"
 	"notification/internal/notification/service"
 )
-
-// TODO: сделать проверку на то, что сообщение уже сохранялось ранее
 
 type Config struct {
 	Addr     string `yaml:"REDIS_ADDR" env:"REDIS_ADDR"`
@@ -36,7 +35,7 @@ func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisClient, er
 	})
 
 	if err := cl.Ping(ctx).Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
 	return &RedisClient{Client: cl, Logger: logger}, nil
@@ -62,9 +61,11 @@ func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.Email
 }
 
 func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
+	now := strconv.Itoa(int(time.Now().Unix()))
+
 	res, err := rc.Client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
-		Min: strconv.Itoa(int(time.Now().Unix())),
-		Max: strconv.Itoa(int(time.Now().Unix())),
+		Min: "-inf",
+		Max: now,
 	}).Result()
 	if err != nil {
 		rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
@@ -82,7 +83,7 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 }
 
 func (rc *RedisClient) parseAndConvertTime(email *service.EmailMessageWithTime) ([]byte, float64, error) {
-	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.Local)
+	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.UTC)
 	if err != nil {
 		rc.Logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
 
