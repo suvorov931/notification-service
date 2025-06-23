@@ -3,6 +3,7 @@ stages:
 
 test:
   stage: test
+  tags:
+    - my-local-runner
   script:
     - go test ./...
-
