@@ -24,6 +24,7 @@ import (
 )
 
 const tickTimeForWorker = 1 * time.Second
+const pathToConfigFile = "./config/config.yaml"
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(),
@@ -33,7 +34,7 @@ func main() {
 	)
 	defer cancel()
 
-	cfg, err := config.New()
+	cfg, err := config.New(pathToConfigFile)
 	if err != nil {
 		log.Fatalf("cannot initialize config: %v", err)
 	}

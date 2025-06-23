@@ -18,10 +18,10 @@ type Config struct {
 	Logger     logger.Config  `yaml:"LOGGER" env:"LOGGER"`
 }
 
-func New() (*Config, error) {
+func New(path string) (*Config, error) {
 	var cfg Config
 
-	if err := cleanenv.ReadConfig("./config/config.yaml", &cfg); err != nil {
+	if err := cleanenv.ReadConfig(path, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
