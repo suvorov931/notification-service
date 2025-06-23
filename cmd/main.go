@@ -16,15 +16,17 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/config"
-	"notification/internal/logger"
+	llogger "notification/internal/logger"
 	"notification/internal/notification/api/handlers"
 	"notification/internal/notification/service"
 	"notification/internal/notification/worker"
 	"notification/internal/rds"
 )
 
-const tickTimeForWorker = 1 * time.Second
-const pathToConfigFile = "./config/config.yaml"
+const (
+	tickTimeForWorker = 1 * time.Second
+	pathToConfigFile  = "./config/config.yaml"
+)
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(),
@@ -39,38 +41,29 @@ func main() {
 		log.Fatalf("cannot initialize config: %v", err)
 	}
 
-	l, err := logger.New(&cfg.Logger)
+	logger, err := llogger.New(&cfg.Logger)
 	if err != nil {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
-	defer l.Sync()
+	defer logger.Sync()
 
-	rc, err := rds.New(ctx, &cfg.Redis, l)
+	redisClient, err := rds.New(ctx, &cfg.Redis, logger)
 	if err != nil {
-		l.Fatal("cannot initialize rds client", zap.Error(err))
+		logger.Fatal("cannot initialize rds client", zap.Error(err))
 	}
 
-	s := service.New(&cfg.SMTP, l)
+	smtpClient := service.New(&cfg.SMTP, logger)
 
-	w := worker.New(l, rc, s, tickTimeForWorker)
+	w := worker.New(logger, redisClient, smtpClient, tickTimeForWorker)
 
 	go func() {
 		err = w.Run(ctx)
 		if err != nil {
-			l.Error("failed in the worker's work", zap.Error(err))
+			logger.Error("worker exited with error", zap.Error(err))
 		}
 	}()
 
-	router := chi.NewRouter()
-
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(logger.MiddlewareLogger(l, &cfg.Logger))
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.URLFormat)
-
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(l, s))
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(l, rc))
+	router := initRouter(logger, &cfg.Logger, smtpClient, redisClient)
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),
@@ -78,50 +71,50 @@ func main() {
 	}
 
 	go func() {
-		l.Info("starting http server", zap.String("addr", srv.Addr))
+		logger.Info("starting http server", zap.String("addr", srv.Addr))
 		if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			l.Fatal("cannot start http server", zap.Error(err))
+			logger.Fatal("cannot start http server", zap.Error(err))
 		}
 	}()
 
 	<-ctx.Done()
-	l.Info("received shutdown signal")
+	logger.Info("received shutdown signal")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer shutdownCancel()
 
-	l.Info("shutting down http server")
+	logger.Info("shutting down http server")
 	if err = srv.Shutdown(shutdownCtx); err != nil {
-		l.Error("cannot shutdown http server", zap.Error(err))
+		logger.Error("cannot shutdown http server", zap.Error(err))
 	} else {
-		l.Info("http server shutdown gracefully")
+		logger.Info("http server shutdown gracefully")
 	}
 
-	l.Info("stopping http server", zap.String("addr", srv.Addr))
+	logger.Info("stopping http server", zap.String("addr", srv.Addr))
+
+	logger.Info("application shutdown completed successfully")
 }
 
-// TODO: отрефакторить названия (особенно в пакете service)
+func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMTPClient, redisClient *rds.RedisClient) *chi.Mux {
+	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RealIP)
+	router.Use(llogger.MiddlewareLogger(logger, cfg))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(logger, smtpClient))
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(logger, redisClient))
+
+	return router
+}
+
 // TODO: покрыть тестами ВСЁ
 // TODO: дополнить README, написать документацию
 // TODO: добавить в stage сборку прогон тестов
 // TODO: GitLab CI/CD
-// TODO: разобраться с отменой на клиентской стороне
 
 // TODO: мониторинг, nginx, kafka
 // TODO: многопоточность
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?
-
-//curl -X POST http://localhost:8080/send-notification -H "Content-Type: application/json" \
-//-d '{
-//"to":"daanisimov04@gmail.com",
-//"subject":"subject",
-//"message":"message"
-//}'
-
-//curl -X POST http://localhost:8080/send-notification-via-time -H "Content-Type: application/json" \
-//-d '{
-//"time":"2035-01-02 15:04:05",
-//"to":"daanisimov04@gmail.com",
-//"subject":"subject",
-//"message":"message"
-//}'
