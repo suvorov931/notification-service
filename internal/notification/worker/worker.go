@@ -10,29 +10,32 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"notification/internal/notification/service"
-	"notification/internal/rds"
 )
 
-const basicTimePeriodForWorker = 1 * time.Second
-
-type Worker struct {
-	logger *zap.Logger
-	rc     *rds.RedisClient
-	sender service.EmailSender
+type RedisChecker interface {
+	CheckRedis(ctx context.Context) ([]string, error)
 }
 
-func New(logger *zap.Logger, rc *rds.RedisClient, sender service.EmailSender) *Worker {
+type Worker struct {
+	logger       *zap.Logger
+	rc           RedisChecker
+	sender       service.EmailSender
+	tickDuration time.Duration
+}
+
+func New(logger *zap.Logger, rc RedisChecker, sender service.EmailSender, tickDuration time.Duration) *Worker {
 	return &Worker{
-		logger: logger,
-		rc:     rc,
-		sender: sender,
+		logger:       logger,
+		rc:           rc,
+		sender:       sender,
+		tickDuration: tickDuration,
 	}
 }
 
 func (w *Worker) Run(ctx context.Context) error {
 	group, ctx := errgroup.WithContext(ctx)
 
-	ticker := time.NewTicker(basicTimePeriodForWorker)
+	ticker := time.NewTicker(w.tickDuration)
 	defer ticker.Stop()
 
 	w.logger.Info("Worker: started")
