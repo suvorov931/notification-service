@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -11,7 +12,8 @@ import (
 )
 
 type Config struct {
-	Env string
+	Env    string
+	Output io.Writer
 }
 
 func New(cfg *Config) (*zap.Logger, error) {
@@ -27,20 +29,52 @@ func New(cfg *Config) (*zap.Logger, error) {
 			enc.AppendString("\033[36m" + t.Format("15:04:05") + "\033[0m")
 		}
 
-		logger, err := config.Build()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create logger: %w", err)
+		if cfg.Output != nil {
+			config.OutputPaths = []string{"stdout"}
+			core := zapcore.NewCore(
+				zapcore.NewConsoleEncoder(config.EncoderConfig),
+				zapcore.AddSync(cfg.Output),
+				config.Level,
+			)
+
+			logger := zap.New(core)
+
+			return logger, nil
+
+		} else {
+			logger, err := config.Build()
+			if err != nil {
+				return nil, err
+			}
+
+			return logger, nil
+
 		}
 
-		return logger, nil
+	case "prod":
+		if cfg.Output != nil {
+			config := zap.NewProductionConfig()
+			core := zapcore.NewCore(
+				zapcore.NewJSONEncoder(config.EncoderConfig),
+				zapcore.AddSync(cfg.Output),
+				config.Level,
+			)
+
+			logger := zap.New(core)
+
+			return logger, nil
+
+		} else {
+			logger, err := zap.NewProduction()
+			if err != nil {
+				return nil, err
+			}
+
+			return logger, nil
+		}
 
 	default:
-		logger, err := zap.NewProduction()
-		if err != nil {
-			return nil, fmt.Errorf("can't initialize logger: %w", err)
-		}
-
-		return logger, nil
+		return nil, fmt.Errorf("unknown environment: %s", cfg.Env)
 	}
 }
 
