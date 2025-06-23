@@ -19,7 +19,7 @@ import (
 	llogger "notification/internal/logger"
 	"notification/internal/notification/api/handlers"
 	"notification/internal/notification/service"
-	"notification/internal/notification/worker"
+	wworker "notification/internal/notification/worker"
 	"notification/internal/rds"
 )
 
@@ -54,10 +54,10 @@ func main() {
 
 	smtpClient := service.New(&cfg.SMTP, logger)
 
-	w := worker.New(logger, redisClient, smtpClient, tickTimeForWorker)
+	worker := wworker.New(logger, redisClient, smtpClient, tickTimeForWorker)
 
 	go func() {
-		err = w.Run(ctx)
+		err = worker.Run(ctx)
 		if err != nil {
 			logger.Error("worker exited with error", zap.Error(err))
 		}
