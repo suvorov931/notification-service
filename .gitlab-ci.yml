@@ -10,4 +10,4 @@ test:
 build:
   stage: build
   script:
-    - go build -v ./...
+    - go build -o app ./cmd/main.go
