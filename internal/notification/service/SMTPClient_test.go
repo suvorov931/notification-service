@@ -22,7 +22,7 @@ import (
 // TODO: добавить кастомных внятных ошибок и проверить их
 // TODO: тесты для sendWithRetry
 
-func TestSendMessage(t *testing.T) {
+func TestSendEmail(t *testing.T) {
 	ctx := context.Background()
 
 	host, port, mailHogPort, url := upMailHog(ctx, t)
@@ -31,20 +31,20 @@ func TestSendMessage(t *testing.T) {
 		name      string
 		from      string
 		wantFrom  string
-		email     *Email
-		wantEmail *Email
+		email     *EmailMessage
+		wantEmail *EmailMessage
 		wantErr   error
 	}{
 		{
 			name:     "successful send",
 			from:     "something@gmail.com",
 			wantFrom: "something@gmail.com",
-			email: &Email{
+			email: &EmailMessage{
 				To:      "daanisimov04@gmail.com",
 				Subject: "hi",
 				Message: "hello from go test",
 			},
-			wantEmail: &Email{
+			wantEmail: &EmailMessage{
 				To:      "daanisimov04@gmail.com",
 				Subject: "hi",
 				Message: "hello from go test",
@@ -54,7 +54,7 @@ func TestSendMessage(t *testing.T) {
 	}
 
 	t.Run("smtp server unreachable", func(t *testing.T) {
-		srv := New(&MailSender{
+		srv := New(&Config{
 			SenderEmail:     "something@gmail.com",
 			SMTPHost:        "localhost",
 			SMTPPort:        9999,
@@ -63,19 +63,20 @@ func TestSendMessage(t *testing.T) {
 			BasicRetryPause: 1,
 		}, zap.NewNop())
 
-		err := srv.SendEmail(ctx, Email{
+		err := srv.SendEmail(ctx, EmailMessage{
 			To:      "daanisimov04@gmail.com",
 			Subject: "hi",
 			Message: "hello from go test",
 		})
 
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "SendMessage: all attempts to send message failed")
+
+		assert.Contains(t, err.Error(), "sendWithRetry: all attempts to send message failed")
 	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := New(&MailSender{
+			srv := New(&Config{
 				SenderEmail: tt.from,
 				SMTPHost:    host,
 				SMTPPort:    port,

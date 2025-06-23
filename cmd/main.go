@@ -23,6 +23,8 @@ import (
 	"notification/internal/rds"
 )
 
+const tickTimeForWorker = 1 * time.Second
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(),
 		os.Interrupt,
@@ -49,7 +51,7 @@ func main() {
 
 	s := service.New(&cfg.SMTP, l)
 
-	w := worker.New(l, rc, s)
+	w := worker.New(l, rc, s, tickTimeForWorker)
 
 	go func() {
 		err = w.Run(ctx)

@@ -35,7 +35,7 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: &service.Email{
+			want: &service.EmailMessage{
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -204,7 +204,7 @@ func TestDecoder(t *testing.T) {
 			}`,
 			want: &service.EmailMessageWithTime{
 				Time: "2035-05-24 00:33:10",
-				Email: service.Email{
+				Email: service.EmailMessage{
 					To:      "example@gmail.com",
 					Subject: "Subject",
 					Message: "Message",
@@ -295,8 +295,8 @@ func TestDecoder(t *testing.T) {
 			if err == nil {
 				switch tt.key {
 				case api.KeyForInstantSending:
-					got := gotAny.(*service.Email)
-					want := tt.want.(*service.Email)
+					got := gotAny.(*service.EmailMessage)
+					want := tt.want.(*service.EmailMessage)
 
 					assert.Equal(t, want, got)
 

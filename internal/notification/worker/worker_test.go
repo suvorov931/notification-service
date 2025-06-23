@@ -62,6 +62,14 @@ func TestWorker(t *testing.T) {
 			wantSendCalled: false,
 		},
 		{
+			name:           "invalid JSON in redis response",
+			redisResponse:  []string{`{invalid json}`},
+			redisError:     nil,
+			wantEmail:      nil,
+			emailError:     nil,
+			wantSendCalled: false,
+		},
+		{
 			name:           "redis error",
 			redisResponse:  nil,
 			redisError:     errors.New("redis error"),
@@ -152,12 +160,14 @@ func TestWorker(t *testing.T) {
 			mockRedis := &MockRedisClient{}
 			mockSender := &MockEmailSender{}
 
-			mockRedis.On("CheckRedis", mock.Anything).Return(tt.redisResponse, tt.redisError)
+			mockRedis.On("CheckRedis", mock.Anything).
+				Return(tt.redisResponse, tt.redisError)
 
 			wg := &sync.WaitGroup{}
 			if tt.wantSendCalled {
 				wg.Add(1)
-				mockSender.On("SendEmail", mock.Anything, *tt.wantEmail).Return(tt.emailError).Run(func(args mock.Arguments) {
+				mockSender.On("SendEmail", mock.Anything, *tt.wantEmail).
+					Return(tt.emailError).Run(func(args mock.Arguments) {
 					wg.Done()
 				})
 			}
@@ -205,7 +215,7 @@ func TestWorker(t *testing.T) {
 	}
 }
 
-func TestWorker_ContextCancel(t *testing.T) {
+func TestWorkerContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mockRedis := &MockRedisClient{}
