@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+
 	"go.uber.org/zap"
 
 	"notification/internal/notification/api"
@@ -18,6 +20,37 @@ import (
 )
 
 const passForRedisTestContainer = "something password"
+
+func TestAddDelayedEmailTimeout(t *testing.T) {
+	ctx := context.Background()
+	db, rdsMock := redismock.NewClientMock()
+
+	rc := RedisClient{
+		Client: db,
+		Logger: zap.NewNop(),
+	}
+
+	email := &service.EmailMessageWithTime{
+		Time: "2026-01-01 01:01:01",
+		Email: service.EmailMessage{
+			To:      "daanisimov04@gmail.com",
+			Subject: "test",
+			Message: "message",
+		},
+	}
+
+	parseEmail := `{"Time":"1767229261","Email":{"to":"daanisimov04@gmail.com","subject":"test","message":"message"}}`
+
+	rdsMock.ExpectZAdd(api.KeyForDelayedSending, redis.Z{
+		Score:  float64(1767229261),
+		Member: []byte(parseEmail),
+	}).SetErr(context.DeadlineExceeded)
+
+	err := rc.AddDelayedEmail(ctx, email)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
 
 func TestAddDelayedEmail(t *testing.T) {
 	ctx := context.Background()
@@ -29,7 +62,7 @@ func TestAddDelayedEmail(t *testing.T) {
 		Password: passForRedisTestContainer,
 	}
 
-	rc, err := New(ctx, cfg, zap.NewNop())
+	rc, err := New(ctx, cfg, zap.NewNop(), 3*time.Second)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -82,7 +115,7 @@ func TestCheckRedis(t *testing.T) {
 		Password: passForRedisTestContainer,
 	}
 
-	rc, err := New(ctx, cfg, zap.NewNop())
+	rc, err := New(ctx, cfg, zap.NewNop(), 3*time.Second)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -147,8 +180,9 @@ func TestFailedConnection(t *testing.T) {
 	ctx := context.Background()
 	cfg := &Config{Addr: "localhost:1234", Password: "wrong"}
 
-	_, err := New(ctx, cfg, zap.NewNop())
+	_, err := New(ctx, cfg, zap.NewNop(), 3*time.Second)
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to connect to redis")
 }
 
 func upRedis(ctx context.Context, containerName string, t *testing.T) string {

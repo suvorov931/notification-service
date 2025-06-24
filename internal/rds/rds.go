@@ -3,6 +3,7 @@ package rds
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"notification/internal/notification/service"
 )
 
+const DefaultTimeoutForAddDelayedEmail = 3 * time.Second
+
 type Config struct {
 	Addr     string `yaml:"REDIS_ADDR" env:"REDIS_ADDR"`
 	Password string `yaml:"REDIS_PASSWORD" env:"REDIS_PASSWORD"`
@@ -22,11 +25,12 @@ type Config struct {
 }
 
 type RedisClient struct {
-	Client *redis.Client
-	Logger *zap.Logger
+	Client  *redis.Client
+	Logger  *zap.Logger
+	Timeout time.Duration
 }
 
-func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisClient, error) {
+func New(ctx context.Context, cfg *Config, logger *zap.Logger, timeout time.Duration) (*RedisClient, error) {
 	cl := redis.NewClient(&redis.Options{
 		Addr:     cfg.Addr,
 		Password: cfg.Password,
@@ -38,14 +42,20 @@ func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisClient, er
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
-	return &RedisClient{Client: cl, Logger: logger}, nil
+	if timeout == 0 {
+		timeout = DefaultTimeoutForAddDelayedEmail
+	}
+
+	return &RedisClient{Client: cl, Logger: logger, Timeout: timeout}, nil
 }
 
 func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.EmailMessageWithTime) error {
+	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
+	defer cancel()
+
 	emailJSON, scr, err := rc.parseAndConvertTime(email)
 	if err != nil {
 		rc.Logger.Error(err.Error())
-
 		return err
 	}
 
@@ -54,7 +64,15 @@ func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.Email
 		Member: emailJSON,
 	}).Err()
 	if err != nil {
-		rc.Logger.Error("AddDelayedEmail: cannot save email in redis", zap.Error(err))
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			rc.Logger.Error("AddDelayedEmail: deadline exceeded", zap.Error(err))
+			return fmt.Errorf("AddDelayedEmail: %w", context.DeadlineExceeded)
+
+		default:
+			rc.Logger.Error("AddDelayedEmail: cannot get entry", zap.Error(err))
+			return err
+		}
 	}
 
 	return nil
