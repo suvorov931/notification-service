@@ -113,7 +113,10 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMT
 // TODO: покрыть тестами ВСЁ
 // TODO: дополнить README, написать документацию
 // TODO: добавить в stage сборку прогон тестов
+
 // TODO: GitLab CI/CD
+// TODO: попробовать на аккаунте лицея
+// TODO: github actions
 
 // TODO: мониторинг, nginx, kafka
 // TODO: многопоточность
