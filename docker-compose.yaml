@@ -1,5 +1,7 @@
 name: notification-service
 
+# TODO: сделать поддержку переменных окружения (внешние порты?), добавить healthcheck
+
 services:
 #  notification-service:
 #    container_name: notification-service
@@ -8,9 +10,70 @@ services:
 #      dockerfile: ./Dockerfile
 #    ports:
 #      - "8080:8080"
-  redis:
-    container_name: redis-container
+  redis-master:
     image: redis:8.0
+    container_name: redis-master
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    command: redis-server --requirepass 1111
     ports:
       - "6379:6379"
-    command: redis-server --requirepass 12345
+    networks:
+      - redis-replication
+
+  redis-slave1:
+    image: redis:8.0
+    container_name: redis-slave-1
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command: redis-server --requirepass 2222 --replicaof redis-master 6379 --masterauth 1111
+    ports:
+      - "6380:6379"
+    networks:
+      - redis-replication
+
+  redis-slave2:
+    image: redis:8.0
+    container_name: redis-slave-2
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command: redis-server --requirepass 3333 --replicaof redis-master 6379 --masterauth 1111
+    ports:
+      - "6381:6379"
+    networks:
+      - redis-replication
+
+networks:
+  redis-replication:
+    driver: bridge
+
+#services:
+#  postgres:
+#    container_name: postgres
+#    env_file:
+#      - config/config.yaml
+#    image: postgres:17
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 3
+#      start_period: 3s
+#    ports:
+#      - "5432:5432"
+#  role_leader:
+#    container_name: roleLeader
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile
+#    ports:
+#      - "50051:50051"
+#      - "8080:8080"
+#    depends_on:
+#      postgres:
+#        condition: service_healthy

@@ -15,6 +15,8 @@ import (
 	"notification/internal/notification/service"
 )
 
+// TODO: добавить время жизни записи в ZSET (неделя/месяц)
+
 const DefaultTimeoutForAddDelayedEmail = 3 * time.Second
 
 type Config struct {
@@ -79,6 +81,9 @@ func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.Email
 }
 
 func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
+	defer cancel()
+
 	now := strconv.Itoa(int(time.Now().Unix()))
 
 	res, err := rc.Client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
@@ -86,9 +91,20 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 		Max: now,
 	}).Result()
 	if err != nil {
-		rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
-		return nil, err
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			rc.Logger.Error("CheckRedis: deadline exceeded", zap.Error(err))
+			return nil, fmt.Errorf("CheckRedis: %w", context.DeadlineExceeded)
+
+		default:
+			rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
+			return nil, err
+		}
 	}
+	//if err != nil {
+	//	rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
+	//	return nil, err
+	//}
 
 	if len(res) != 0 {
 		err = rc.Client.ZRem(ctx, api.KeyForDelayedSending, res).Err()

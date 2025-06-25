@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	tickTimeForWorker = 1 * time.Second
 	pathToConfigFile  = "./config/config.yaml"
+	redisTimeout      = 3 * time.Second
+	tickTimeForWorker = 1 * time.Second
 )
 
 func main() {
@@ -47,7 +48,7 @@ func main() {
 	}
 	defer logger.Sync()
 
-	redisClient, err := rds.New(ctx, &cfg.Redis, logger)
+	redisClient, err := rds.New(ctx, &cfg.Redis, logger, redisTimeout)
 	if err != nil {
 		logger.Fatal("cannot initialize rds client", zap.Error(err))
 	}
@@ -118,6 +119,6 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMT
 // TODO: попробовать на аккаунте лицея
 // TODO: github actions
 
-// TODO: мониторинг, nginx, kafka
+// TODO: мониторинг в целом и редиса, nginx, kafka
 // TODO: многопоточность
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?

@@ -21,37 +21,6 @@ import (
 
 const passForRedisTestContainer = "something password"
 
-func TestAddDelayedEmailTimeout(t *testing.T) {
-	ctx := context.Background()
-	db, rdsMock := redismock.NewClientMock()
-
-	rc := RedisClient{
-		Client: db,
-		Logger: zap.NewNop(),
-	}
-
-	email := &service.EmailMessageWithTime{
-		Time: "2026-01-01 01:01:01",
-		Email: service.EmailMessage{
-			To:      "daanisimov04@gmail.com",
-			Subject: "test",
-			Message: "message",
-		},
-	}
-
-	parseEmail := `{"Time":"1767229261","Email":{"to":"daanisimov04@gmail.com","subject":"test","message":"message"}}`
-
-	rdsMock.ExpectZAdd(api.KeyForDelayedSending, redis.Z{
-		Score:  float64(1767229261),
-		Member: []byte(parseEmail),
-	}).SetErr(context.DeadlineExceeded)
-
-	err := rc.AddDelayedEmail(ctx, email)
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-}
-
 func TestAddDelayedEmail(t *testing.T) {
 	ctx := context.Background()
 
@@ -105,6 +74,37 @@ func TestAddDelayedEmail(t *testing.T) {
 
 }
 
+func TestAddDelayedEmailTimeout(t *testing.T) {
+	ctx := context.Background()
+	db, rdsMock := redismock.NewClientMock()
+
+	rc := RedisClient{
+		Client: db,
+		Logger: zap.NewNop(),
+	}
+
+	email := &service.EmailMessageWithTime{
+		Time: "2026-01-01 01:01:01",
+		Email: service.EmailMessage{
+			To:      "daanisimov04@gmail.com",
+			Subject: "test",
+			Message: "message",
+		},
+	}
+
+	parseEmail := `{"Time":"1767229261","Email":{"to":"daanisimov04@gmail.com","subject":"test","message":"message"}}`
+
+	rdsMock.ExpectZAdd(api.KeyForDelayedSending, redis.Z{
+		Score:  float64(1767229261),
+		Member: []byte(parseEmail),
+	}).SetErr(context.DeadlineExceeded)
+
+	err := rc.AddDelayedEmail(ctx, email)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
 func TestCheckRedis(t *testing.T) {
 	ctx := context.Background()
 
@@ -137,7 +137,7 @@ func TestCheckRedis(t *testing.T) {
 			},
 		},
 		{
-			name: "success check one entry",
+			name: "success check two entry",
 			z: []redis.Z{
 				{Score: float64(time.Now().Unix()), Member: "2"},
 				{Score: float64(time.Now().Unix()), Member: "22"},
@@ -174,6 +174,10 @@ func TestCheckRedis(t *testing.T) {
 			tt.delFunc(*rc.Client)
 		})
 	}
+}
+
+func TestCheckRedisTimeout(t *testing.T) {
+
 }
 
 func TestFailedConnection(t *testing.T) {
