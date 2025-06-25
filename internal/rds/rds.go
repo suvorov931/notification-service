@@ -20,35 +20,59 @@ import (
 const DefaultTimeoutForAddDelayedEmail = 3 * time.Second
 
 type Config struct {
-	Addr     string `yaml:"REDIS_ADDR" env:"REDIS_ADDR"`
-	Password string `yaml:"REDIS_PASSWORD" env:"REDIS_PASSWORD"`
+	//Addr     string `yaml:"REDIS_ADDR" env:"REDIS_ADDR"`
+	MasterPassword string `yaml:"REDIS_MASTER_PASSWORD" env:"REDIS_MASTER_PASSWORD"`
+	Slave1Password string `yaml:"REDIS_SLAVE_1_PASSWORD" env:"REDIS_SLAVE_1_PASSWORD"`
+	Slave2Password string `yaml:"REDIS_SLAVE_2_PASSWORD" env:"REDIS_SLAVE_2_PASSWORD"`
 	//DB       int    `yaml:"REDIS_DB" env:"REDIS_DB"`
 	//Username string `yaml:"REDIS_USERNAME" env:"REDIS_USERNAME"`
 }
 
 type RedisClient struct {
-	Client  *redis.Client
+	Master  *redis.Client
+	Slaves  []*redis.Client
 	Logger  *zap.Logger
 	Timeout time.Duration
 }
 
-func New(ctx context.Context, cfg *Config, logger *zap.Logger, timeout time.Duration) (*RedisClient, error) {
-	cl := redis.NewClient(&redis.Options{
-		Addr:     cfg.Addr,
-		Password: cfg.Password,
-		//DB:       cfg.DB,
-		//Username: cfg.Username,
-	})
+//Addr:     cfg.Addr,
+//DB:       cfg.DB,
+//Username: cfg.Username,
 
-	if err := cl.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to redis: %w", err)
+func New(ctx context.Context, cfg *Config, logger *zap.Logger, timeout time.Duration) (*RedisClient, error) {
+	master := redis.NewClient(&redis.Options{
+		Password: cfg.MasterPassword,
+	})
+	if err := master.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to redis-master: %w", err)
 	}
+
+	slave1 := redis.NewClient(&redis.Options{
+		Password: cfg.Slave1Password,
+	})
+	if err := slave1.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to redis-slave-1: %w", err)
+	}
+
+	slave2 := redis.NewClient(&redis.Options{
+		Password: cfg.Slave1Password,
+	})
+	if err := slave2.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to redis-slave-2: %w", err)
+	}
+
+	slaves := []*redis.Client{slave1, slave2}
 
 	if timeout == 0 {
 		timeout = DefaultTimeoutForAddDelayedEmail
 	}
 
-	return &RedisClient{Client: cl, Logger: logger, Timeout: timeout}, nil
+	return &RedisClient{
+		Master:  master,
+		Slaves:  slaves,
+		Logger:  logger,
+		Timeout: timeout,
+	}, nil
 }
 
 func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.EmailMessageWithTime) error {
