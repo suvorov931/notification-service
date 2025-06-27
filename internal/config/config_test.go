@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,12 +27,18 @@ SMTP:
   MAX_RETRIES: 3
   BASIC_RETRY_PAUSE: 5
 REDIS:
-  REDIS_ADDR: localhost:6379
-  REDIS_PASSWORD: 12345
-  REDIS_DB: 
-  REDIS_USERNAME:
+  REDIS_CLUSTER_ADDRS:
+    - redis-node-1:7001
+    - redis-node-2:7002
+    - redis-node-3:7003
+    - redis-node-4:7004
+    - redis-node-5:7005
+    - redis-node-6:7006
+  REDIS_CLUSTER_TIMEOUT: 3s
+  REDIS_CLUSTER_PASSWORD: 12345
+  REDIS_CLUSTER_READ_ONLY: true
 LOGGER:
-  env: dev
+  ENV: dev
 `
 
 	err := os.WriteFile(tempFile, []byte(content), 0644)
@@ -50,8 +58,19 @@ LOGGER:
 	assert.Equal(t, 3, cfg.SMTP.MaxRetries)
 	assert.Equal(t, 5, cfg.SMTP.BasicRetryPause)
 
-	assert.Equal(t, "localhost:6379", cfg.Redis.Addr)
+	fmt.Println(cfg)
+
+	assert.Equal(t, []string{
+		"redis-node-1:7001",
+		"redis-node-2:7002",
+		"redis-node-3:7003",
+		"redis-node-4:7004",
+		"redis-node-5:7005",
+		"redis-node-6:7006",
+	}, cfg.Redis.Addrs)
+	assert.Equal(t, 3*time.Second, cfg.Redis.Timeout)
 	assert.Equal(t, "12345", cfg.Redis.Password)
+	assert.Equal(t, true, cfg.Redis.ReadOnly)
 
 	assert.Equal(t, "dev", cfg.Logger.Env)
 

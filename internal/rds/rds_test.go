@@ -2,10 +2,14 @@ package rds
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -19,19 +23,12 @@ import (
 	"notification/internal/notification/service"
 )
 
-const passForRedisTestContainer = "something password"
-
 func TestAddDelayedEmail(t *testing.T) {
 	ctx := context.Background()
 
-	addr := upRedis(ctx, "redis-for-AddDelayedEmail", t)
+	addrs := upRedisCluster(ctx, "TestAddDelayedEmail", 1, t)
 
-	cfg := &Config{
-		Addr:     addr,
-		Password: passForRedisTestContainer,
-	}
-
-	rc, err := New(ctx, cfg, zap.NewNop(), 3*time.Second)
+	rc, err := New(ctx, &Config{Addrs: addrs}, zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -62,7 +59,7 @@ func TestAddDelayedEmail(t *testing.T) {
 				t.Errorf("AddDelayedEmail() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			email, err := rc.Client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+			email, err := rc.Cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 				Min: tt.email.Time,
 				Max: tt.email.Time,
 			}).Result()
@@ -76,11 +73,11 @@ func TestAddDelayedEmail(t *testing.T) {
 
 func TestAddDelayedEmailTimeout(t *testing.T) {
 	ctx := context.Background()
-	db, rdsMock := redismock.NewClientMock()
+	db, rdsMock := redismock.NewClusterMock()
 
-	rc := RedisClient{
-		Client: db,
-		Logger: zap.NewNop(),
+	rc := RedisCluster{
+		Cluster: db,
+		Logger:  zap.NewNop(),
 	}
 
 	email := &service.EmailMessageWithTime{
@@ -108,14 +105,9 @@ func TestAddDelayedEmailTimeout(t *testing.T) {
 func TestCheckRedis(t *testing.T) {
 	ctx := context.Background()
 
-	addr := upRedis(ctx, "redis-for-CheckRedis", t)
+	addrs := upRedisCluster(ctx, "TestCheckRedis", 2, t)
 
-	cfg := &Config{
-		Addr:     addr,
-		Password: passForRedisTestContainer,
-	}
-
-	rc, err := New(ctx, cfg, zap.NewNop(), 3*time.Second)
+	rc, err := New(ctx, &Config{Addrs: addrs}, zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -123,7 +115,7 @@ func TestCheckRedis(t *testing.T) {
 		z       []redis.Z
 		want    []string
 		wantErr error
-		delFunc func(rc redis.Client)
+		delFunc func(rc redis.ClusterClient)
 	}{
 		{
 			name: "success check one entry",
@@ -132,7 +124,7 @@ func TestCheckRedis(t *testing.T) {
 			},
 			want:    []string{"1"},
 			wantErr: nil,
-			delFunc: func(rc redis.Client) {
+			delFunc: func(rc redis.ClusterClient) {
 				rc.ZRem(ctx, api.KeyForDelayedSending, "1")
 			},
 		},
@@ -144,7 +136,7 @@ func TestCheckRedis(t *testing.T) {
 			},
 			want:    []string{"2", "22"},
 			wantErr: nil,
-			delFunc: func(rc redis.Client) {
+			delFunc: func(rc redis.ClusterClient) {
 				rc.ZRem(ctx, api.KeyForDelayedSending, "2", "22")
 			},
 		},
@@ -155,7 +147,7 @@ func TestCheckRedis(t *testing.T) {
 			},
 			want:    []string{""},
 			wantErr: nil,
-			delFunc: func(rc redis.Client) {
+			delFunc: func(rc redis.ClusterClient) {
 				rc.ZRem(ctx, api.KeyForDelayedSending)
 			},
 		},
@@ -163,7 +155,7 @@ func TestCheckRedis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = rc.Client.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
+			err = rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
 			require.NoError(t, err)
 
 			res, err := rc.CheckRedis(ctx)
@@ -171,44 +163,175 @@ func TestCheckRedis(t *testing.T) {
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.want, res)
 
-			tt.delFunc(*rc.Client)
+			tt.delFunc(*rc.Cluster)
 		})
 	}
+
+	t.Run("check removal after reading", func(t *testing.T) {
+		err := rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+			Score:  float64(time.Now().Unix()),
+			Member: "something",
+		}).Err()
+		require.NoError(t, err)
+
+		res, err := rc.CheckRedis(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"something"}, res)
+
+		emptyRes, err := rc.Cluster.ZRange(ctx, api.KeyForDelayedSending, 0, -1).Result()
+		require.NoError(t, err)
+		assert.Equal(t, []string{}, emptyRes)
+
+	})
 }
 
 func TestCheckRedisTimeout(t *testing.T) {
+	ctx := context.Background()
+	db, rdsMock := redismock.NewClusterMock()
+
+	rc := RedisCluster{
+		Cluster: db,
+		Logger:  zap.NewNop(),
+	}
+
+	now := float64(time.Now().Unix())
+
+	rdsMock.ExpectZRangeByScore(api.KeyForDelayedSending, &redis.ZRangeBy{
+		Min: "-inf",
+		Max: strconv.FormatFloat(now, 'f', -1, 64),
+	}).SetErr(context.DeadlineExceeded)
+
+	res, err := rc.CheckRedis(ctx)
+
+	assert.Nil(t, res)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 
 }
 
 func TestFailedConnection(t *testing.T) {
 	ctx := context.Background()
-	cfg := &Config{Addr: "localhost:1234", Password: "wrong"}
+	cfg := &Config{
+		Addrs: []string{
+			"localhost:1234",
+		},
+		Password: "wrong",
+	}
 
-	_, err := New(ctx, cfg, zap.NewNop(), 3*time.Second)
+	_, err := New(ctx, cfg, zap.NewNop())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to redis")
 }
 
-func upRedis(ctx context.Context, containerName string, t *testing.T) string {
-	t.Helper()
-
-	req := testcontainers.ContainerRequest{
-		Name:         containerName,
-		Image:        "redis:8.0",
-		ExposedPorts: []string{"8021/tcp", "6379/tcp"},
-		Cmd:          []string{"redis-server", "--requirepass", passForRedisTestContainer},
-		WaitingFor:   wait.ForListeningPort("6379/tcp").WithStartupTimeout(60 * time.Second),
+func TestParseAndConvertTime(t *testing.T) {
+	rc := RedisCluster{
+		Logger: zap.NewNop(),
 	}
 
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-		Reuse:            false,
-	})
-	require.NoError(t, err)
+	tests := []struct {
+		name        string
+		email       *service.EmailMessageWithTime
+		expectedErr bool
+	}{
+		{
+			name: "success",
+			email: &service.EmailMessageWithTime{
+				Time: "2035-06-27 15:04:05",
+				Email: service.EmailMessage{
+					To:      "test@gmail.com",
+					Subject: "subject",
+					Message: "message",
+				},
+			},
+			expectedErr: false,
+		},
+		{
+			name: "invalid time",
+			email: &service.EmailMessageWithTime{
+				Time: "invalid time",
+				Email: service.EmailMessage{
+					To:      "test@gmail.com",
+					Subject: "subject",
+					Message: "message",
+				},
+			},
+			expectedErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, score, err := rc.parseAndConvertTime(tt.email)
 
-	port, err := container.MappedPort(ctx, "6379")
-	require.NoError(t, err)
+			if tt.expectedErr {
+				require.Error(t, err)
+				assert.Nil(t, res)
+				assert.Equal(t, 0.0, score)
+				assert.Contains(t, err.Error(), "parseAndConvertTime: cannot parse email.Time")
+			} else {
+				require.NoError(t, err)
 
-	return "localhost:" + port.Port()
+				wantScore, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-06-27 15:04:05", time.UTC)
+				require.NoError(t, err)
+
+				assert.Equal(t, float64(wantScore.Unix()), score)
+
+				var wantEmail service.EmailMessageWithTime
+				err = json.Unmarshal(res, &wantEmail)
+				require.NoError(t, err)
+				assert.Equal(t, wantEmail.Email, tt.email.Email)
+			}
+		})
+	}
+}
+
+func upRedisCluster(ctx context.Context, containerName string, num int, t *testing.T) []string {
+	t.Helper()
+
+	addrs := make([]string, 0, 6)
+
+	for i := 1; i <= 6; i++ {
+		port := fmt.Sprintf("70%d%d", num, i)
+		busPort := fmt.Sprintf("170%d%d", num, i)
+
+		req := testcontainers.ContainerRequest{
+			Name:  fmt.Sprintf("%s-%d", containerName, i),
+			Image: "redis:8.0",
+			HostConfigModifier: func(hc *container.HostConfig) {
+				hc.NetworkMode = "host"
+			},
+			Cmd: []string{
+				"redis-server",
+				"--port", port,
+				"--cluster-announce-ip", "127.0.0.1",
+				"--cluster-announce-port", port,
+				"--cluster-announce-bus-port", busPort,
+				"--cluster-enabled", "yes",
+				"--cluster-config-file", "nodes.conf",
+				"--cluster-node-timeout", "5000",
+				"--appendonly", "yes",
+			},
+			WaitingFor: wait.ForLog("Ready to accept connections"),
+		}
+
+		cont, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: req,
+			Started:          true,
+			Reuse:            false,
+		})
+		require.NoError(t, err)
+
+		addr := fmt.Sprintf("127.0.0.1:%s", port)
+		addrs = append(addrs, addr)
+
+		if len(addrs) == 6 {
+			cmd := append([]string{"redis-cli", "--cluster", "create"}, addrs...)
+			cmd = append(cmd, "--cluster-replicas", "1", "--cluster-yes")
+
+			_, _, err := cont.Exec(ctx, cmd)
+			require.NoError(t, err)
+		}
+
+	}
+
+	return addrs
 }

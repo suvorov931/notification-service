@@ -16,6 +16,8 @@ import (
 	"notification/internal/notification/service"
 )
 
+const emailTimeLayout = "2006-01-02 15:04:05"
+
 var (
 	ErrNotAllFields            = errors.New("DecodeMailRequest: checkFields: request body not all required fields are filled")
 	ErrNoValidRecipientAddress = errors.New("DecodeMailRequest: checkFields: no valid recipient address found")
@@ -201,7 +203,7 @@ func (d *decoder) checkFields(email any) (any, error) {
 }
 
 func (d *decoder) checkTime(t string) error {
-	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", t, time.UTC)
+	UTCTime, err := time.ParseInLocation(emailTimeLayout, t, time.UTC)
 	if err != nil {
 		d.logger.Info(ErrNoValidTimeFiled.Error())
 		http.Error(d.w, "The specified time is not a valid", http.StatusBadRequest)

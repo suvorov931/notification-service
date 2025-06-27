@@ -15,78 +15,61 @@ import (
 	"notification/internal/notification/service"
 )
 
-// TODO: добавить время жизни записи в ZSET (неделя/месяц)
-
-const DefaultTimeoutForAddDelayedEmail = 3 * time.Second
+const (
+	DefaultRedisTimeout = 3 * time.Second
+	emailTimeLayout     = "2006-01-02 15:04:05"
+)
 
 type Config struct {
-	//Addr     string `yaml:"REDIS_ADDR" env:"REDIS_ADDR"`
-	MasterPassword string `yaml:"REDIS_MASTER_PASSWORD" env:"REDIS_MASTER_PASSWORD"`
-	Slave1Password string `yaml:"REDIS_SLAVE_1_PASSWORD" env:"REDIS_SLAVE_1_PASSWORD"`
-	Slave2Password string `yaml:"REDIS_SLAVE_2_PASSWORD" env:"REDIS_SLAVE_2_PASSWORD"`
-	//DB       int    `yaml:"REDIS_DB" env:"REDIS_DB"`
-	//Username string `yaml:"REDIS_USERNAME" env:"REDIS_USERNAME"`
+	Addrs    []string      `yaml:"REDIS_CLUSTER_ADDRS"`
+	Timeout  time.Duration `yaml:"REDIS_CLUSTER_TIMEOUT"`
+	Password string        `yaml:"REDIS_CLUSTER_PASSWORD"`
+	ReadOnly bool          `yaml:"REDIS_CLUSTER_READ_ONLY"`
 }
 
-type RedisClient struct {
-	Master  *redis.Client
-	Slaves  []*redis.Client
+type RedisCluster struct {
+	Cluster *redis.ClusterClient
 	Logger  *zap.Logger
 	Timeout time.Duration
 }
 
-//Addr:     cfg.Addr,
-//DB:       cfg.DB,
-//Username: cfg.Username,
+func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisCluster, error) {
+	if cfg.Timeout == 0 {
+		cfg.Timeout = DefaultRedisTimeout
+	}
 
-func New(ctx context.Context, cfg *Config, logger *zap.Logger, timeout time.Duration) (*RedisClient, error) {
-	master := redis.NewClient(&redis.Options{
-		Password: cfg.MasterPassword,
+	pingCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	defer cancel()
+
+	cluster := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs:    cfg.Addrs,
+		Password: cfg.Password,
+		ReadOnly: cfg.ReadOnly,
 	})
-	if err := master.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to redis-master: %w", err)
+
+	if err := cluster.Ping(pingCtx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to redis cluster: %w", err)
 	}
 
-	slave1 := redis.NewClient(&redis.Options{
-		Password: cfg.Slave1Password,
-	})
-	if err := slave1.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to redis-slave-1: %w", err)
-	}
-
-	slave2 := redis.NewClient(&redis.Options{
-		Password: cfg.Slave1Password,
-	})
-	if err := slave2.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to redis-slave-2: %w", err)
-	}
-
-	slaves := []*redis.Client{slave1, slave2}
-
-	if timeout == 0 {
-		timeout = DefaultTimeoutForAddDelayedEmail
-	}
-
-	return &RedisClient{
-		Master:  master,
-		Slaves:  slaves,
+	return &RedisCluster{
+		Cluster: cluster,
 		Logger:  logger,
-		Timeout: timeout,
+		Timeout: cfg.Timeout,
 	}, nil
 }
 
-func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.EmailMessageWithTime) error {
+func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *service.EmailMessageWithTime) error {
 	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
 	defer cancel()
 
-	emailJSON, scr, err := rc.parseAndConvertTime(email)
+	emailJSON, score, err := rc.parseAndConvertTime(email)
 	if err != nil {
 		rc.Logger.Error(err.Error())
 		return err
 	}
 
-	err = rc.Client.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
-		Score:  scr,
+	err = rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+		Score:  score,
 		Member: emailJSON,
 	}).Err()
 	if err != nil {
@@ -104,15 +87,15 @@ func (rc *RedisClient) AddDelayedEmail(ctx context.Context, email *service.Email
 	return nil
 }
 
-func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
+func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
 	defer cancel()
 
-	now := strconv.Itoa(int(time.Now().Unix()))
+	now := float64(time.Now().Unix())
 
-	res, err := rc.Client.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+	res, err := rc.Cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 		Min: "-inf",
-		Max: now,
+		Max: strconv.FormatFloat(now, 'f', -1, 64),
 	}).Result()
 	if err != nil {
 		switch {
@@ -125,13 +108,9 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 	}
-	//if err != nil {
-	//	rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
-	//	return nil, err
-	//}
 
 	if len(res) != 0 {
-		err = rc.Client.ZRem(ctx, api.KeyForDelayedSending, res).Err()
+		err = rc.Cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
 		if err != nil {
 			rc.Logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
 		}
@@ -140,12 +119,12 @@ func (rc *RedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-func (rc *RedisClient) parseAndConvertTime(email *service.EmailMessageWithTime) ([]byte, float64, error) {
-	UTCTime, err := time.ParseInLocation("2006-01-02 15:04:05", email.Time, time.UTC)
+func (rc *RedisCluster) parseAndConvertTime(email *service.EmailMessageWithTime) ([]byte, float64, error) {
+	UTCTime, err := time.ParseInLocation(emailTimeLayout, email.Time, time.UTC)
 	if err != nil {
 		rc.Logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
 
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("parseAndConvertTime: cannot parse email.Time: %s: %w", email.Time, err)
 	}
 
 	email.Time = strconv.Itoa(int(UTCTime.Unix()))

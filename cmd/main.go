@@ -25,7 +25,6 @@ import (
 
 const (
 	pathToConfigFile  = "./config/config.yaml"
-	redisTimeout      = 3 * time.Second
 	tickTimeForWorker = 1 * time.Second
 )
 
@@ -48,7 +47,7 @@ func main() {
 	}
 	defer logger.Sync()
 
-	redisClient, err := rds.New(ctx, &cfg.Redis, logger, redisTimeout)
+	redisClient, err := rds.New(ctx, &cfg.Redis, logger)
 	if err != nil {
 		logger.Fatal("cannot initialize rds client", zap.Error(err))
 	}
@@ -96,7 +95,7 @@ func main() {
 	logger.Info("application shutdown completed successfully")
 }
 
-func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMTPClient, redisClient *rds.RedisClient) *chi.Mux {
+func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMTPClient, redisClient *rds.RedisCluster) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)

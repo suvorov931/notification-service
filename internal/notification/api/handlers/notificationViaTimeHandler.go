@@ -13,7 +13,7 @@ import (
 
 // TODO: добавить отмену по контексту
 
-func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisClient) http.HandlerFunc {
+func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisCluster) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
