@@ -5,15 +5,15 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
 	"notification/internal/notification/api/decoder"
-	"notification/internal/notification/service"
-	"notification/internal/rds"
+	"notification/internal/redisClient"
 )
 
 // TODO: добавить отмену по контексту
 
-func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisCluster) http.HandlerFunc {
+func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *redisClient.RedisCluster) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -33,7 +33,7 @@ func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *rds.RedisCluster) http
 			l.Warn("NewSendNotificationViaTimeHandler: ResponseWriter does not support flushing")
 		}
 
-		if err = rc.AddDelayedEmail(ctx, email.(*service.EmailMessageWithTime)); err != nil {
+		if err = rc.AddDelayedEmail(ctx, email.(*SMTPClient.EmailMessageWithTime)); err != nil {
 			return
 		}
 

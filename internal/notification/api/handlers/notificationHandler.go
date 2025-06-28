@@ -7,12 +7,12 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
 	"notification/internal/notification/api/decoder"
-	"notification/internal/notification/service"
 )
 
-func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.HandlerFunc {
+func NewSendNotificationHandler(l *zap.Logger, sender SMTPClient.EmailSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -32,7 +32,7 @@ func NewSendNotificationHandler(l *zap.Logger, sender service.EmailSender) http.
 			l.Warn("NewSendNotificationHandler: ResponseWriter does not support flushing")
 		}
 
-		err = sender.SendEmail(ctx, *email.(*service.EmailMessage))
+		err = sender.SendEmail(ctx, *email.(*SMTPClient.EmailMessage))
 		if err != nil {
 			if errors.Is(ctx.Err(), context.Canceled) {
 				l.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"notification/internal/notification/service"
+	"notification/internal/notification/SMTPClient"
 )
 
 type MockRedisClient struct {
@@ -27,7 +27,7 @@ type MockEmailSender struct {
 	mock.Mock
 }
 
-func (m *MockEmailSender) SendEmail(ctx context.Context, email service.EmailMessage) error {
+func (m *MockEmailSender) SendEmail(ctx context.Context, email SMTPClient.EmailMessage) error {
 	args := m.Called(ctx, email)
 	return args.Error(0)
 }
@@ -37,7 +37,7 @@ func TestWorker(t *testing.T) {
 		name           string
 		redisResponse  []string
 		redisError     error
-		wantEmail      *service.EmailMessage
+		wantEmail      *SMTPClient.EmailMessage
 		emailError     error
 		wantSendCalled bool
 	}{
@@ -45,7 +45,7 @@ func TestWorker(t *testing.T) {
 			name:          "successful processing",
 			redisResponse: []string{`{"Time":"1764687845","Email":{"to":"test@example.com","subject":"Test","message":"Test message"}}`},
 			redisError:    nil,
-			wantEmail: &service.EmailMessage{
+			wantEmail: &SMTPClient.EmailMessage{
 				To:      "test@example.com",
 				Subject: "Test",
 				Message: "Test message",
@@ -81,7 +81,7 @@ func TestWorker(t *testing.T) {
 			name:          "SendEmail returns error",
 			redisResponse: []string{`{"Time":"1764687845","Email":{"to":"test@example.com","subject":"Test","message":"Test message"}}`},
 			redisError:    nil,
-			wantEmail: &service.EmailMessage{
+			wantEmail: &SMTPClient.EmailMessage{
 				To:      "test@example.com",
 				Subject: "Test",
 				Message: "Test message",
@@ -116,7 +116,7 @@ func TestWorker(t *testing.T) {
 			100*time.Millisecond,
 		)
 
-		mockSender.On("SendEmail", mock.Anything, service.EmailMessage{
+		mockSender.On("SendEmail", mock.Anything, SMTPClient.EmailMessage{
 			To:      "test1@example.com",
 			Subject: "Test1",
 			Message: "Test message1",
@@ -124,7 +124,7 @@ func TestWorker(t *testing.T) {
 			wg.Done()
 		})
 
-		mockSender.On("SendEmail", mock.Anything, service.EmailMessage{
+		mockSender.On("SendEmail", mock.Anything, SMTPClient.EmailMessage{
 			To:      "test2@example.com",
 			Subject: "Test2",
 			Message: "Test message2",

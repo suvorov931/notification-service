@@ -6,16 +6,16 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 
 	"notification/internal/logger"
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
-	"notification/internal/notification/service"
-	"notification/internal/rds"
+	"notification/internal/redisClient"
 )
 
 type Config struct {
-	HttpServer api.HttpServer `yaml:"HTTP_SERVER"`
-	SMTP       service.Config `yaml:"SMTP"`
-	Redis      rds.Config     `yaml:"REDIS"`
-	Logger     logger.Config  `yaml:"LOGGER"`
+	HttpServer api.HttpServer     `yaml:"HTTP_SERVER"`
+	SMTP       SMTPClient.Config  `yaml:"SMTP"`
+	Redis      redisClient.Config `yaml:"REDIS"`
+	Logger     logger.Config      `yaml:"LOGGER"`
 }
 
 func New(path string) (*Config, error) {

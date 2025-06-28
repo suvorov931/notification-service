@@ -82,7 +82,7 @@ go test ./... -v
 go test  -v  
 
 # отдельный запуск тестов для функции отправки сообщений
-# (запускать из папки ./internal/notification/service)
+# (запускать из папки ./internal/notification/SMTPClient)
 go test  -v 
 ```
 

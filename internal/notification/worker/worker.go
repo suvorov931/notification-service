@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"notification/internal/notification/service"
+	"notification/internal/notification/SMTPClient"
 )
 
 type RedisChecker interface {
@@ -19,11 +19,11 @@ type RedisChecker interface {
 type Worker struct {
 	logger       *zap.Logger
 	rc           RedisChecker
-	sender       service.EmailSender
+	sender       SMTPClient.EmailSender
 	tickDuration time.Duration
 }
 
-func New(logger *zap.Logger, rc RedisChecker, sender service.EmailSender, tickDuration time.Duration) *Worker {
+func New(logger *zap.Logger, rc RedisChecker, sender SMTPClient.EmailSender, tickDuration time.Duration) *Worker {
 	return &Worker{
 		logger:       logger,
 		rc:           rc,
@@ -84,7 +84,7 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 		default:
 
-			var res service.EmailMessageWithTime
+			var res SMTPClient.EmailMessageWithTime
 
 			if err := json.Unmarshal([]byte(entry), &res); err != nil {
 				w.logger.Error("parseAndSendEntry: failed to unmarshal entry", zap.Error(err), zap.String("entry", entry))

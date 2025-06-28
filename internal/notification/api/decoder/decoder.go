@@ -12,8 +12,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
-	"notification/internal/notification/service"
 )
 
 const emailTimeLayout = "2006-01-02 15:04:05"
@@ -78,9 +78,9 @@ func (d *decoder) createEmailModel(key string) (any, error) {
 	var email any
 	switch key {
 	case api.KeyForInstantSending:
-		email = &service.EmailMessage{}
+		email = &SMTPClient.EmailMessage{}
 	case api.KeyForDelayedSending:
-		email = &service.TempEmailMessageWithTime{}
+		email = &SMTPClient.TempEmailMessageWithTime{}
 	default:
 		http.Error(d.w, http.StatusText(500), http.StatusInternalServerError)
 
@@ -151,7 +151,7 @@ func (d *decoder) errDuringParse(err error) error {
 
 func (d *decoder) checkFields(email any) (any, error) {
 	switch t := email.(type) {
-	case *service.EmailMessage:
+	case *SMTPClient.EmailMessage:
 		if t.To == "" || t.Message == "" || t.Subject == "" {
 			d.logger.Error(ErrNotAllFields.Error())
 			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
@@ -168,7 +168,7 @@ func (d *decoder) checkFields(email any) (any, error) {
 
 		return email, nil
 
-	case *service.TempEmailMessageWithTime:
+	case *SMTPClient.TempEmailMessageWithTime:
 		if t.Time == "" || t.To == "" || t.Message == "" || t.Subject == "" {
 			d.logger.Error(ErrNotAllFields.Error())
 			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
@@ -187,9 +187,9 @@ func (d *decoder) checkFields(email any) (any, error) {
 			return nil, ErrNoValidRecipientAddress
 		}
 
-		res := service.EmailMessageWithTime{
+		res := SMTPClient.EmailMessageWithTime{
 			Time: t.Time,
-			Email: service.EmailMessage{
+			Email: SMTPClient.EmailMessage{
 				To:      t.To,
 				Subject: t.Subject,
 				Message: t.Message,

@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
-	"notification/internal/notification/service"
 )
 
 func TestDecoder(t *testing.T) {
@@ -35,7 +35,7 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: &service.EmailMessage{
+			want: &SMTPClient.EmailMessage{
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -202,9 +202,9 @@ func TestDecoder(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: &service.EmailMessageWithTime{
+			want: &SMTPClient.EmailMessageWithTime{
 				Time: "2035-05-24 00:33:10",
-				Email: service.EmailMessage{
+				Email: SMTPClient.EmailMessage{
 					To:      "example@gmail.com",
 					Subject: "Subject",
 					Message: "Message",
@@ -295,14 +295,14 @@ func TestDecoder(t *testing.T) {
 			if err == nil {
 				switch tt.key {
 				case api.KeyForInstantSending:
-					got := gotAny.(*service.EmailMessage)
-					want := tt.want.(*service.EmailMessage)
+					got := gotAny.(*SMTPClient.EmailMessage)
+					want := tt.want.(*SMTPClient.EmailMessage)
 
 					assert.Equal(t, want, got)
 
 				case api.KeyForDelayedSending:
-					got := gotAny.(*service.EmailMessageWithTime)
-					want := tt.want.(*service.EmailMessageWithTime)
+					got := gotAny.(*SMTPClient.EmailMessageWithTime)
+					want := tt.want.(*SMTPClient.EmailMessageWithTime)
 
 					assert.Equal(t, want, got)
 				}

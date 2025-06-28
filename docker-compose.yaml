@@ -1,239 +1,232 @@
-#name: notification-service
-#
-#version: '3.8'
-#
-#
-## TODO: сделать поддержку переменных окружения (внешние порты?), добавить healthcheck
-#
-#services:
-##  notification-service:
-##    container_name: notification-service
-##    build:
-##      context: .
-##      dockerfile: ./Dockerfile
-##    ports:
-##      - "8080:8080"
-#
-#  #redis-server --port 7006 --cluster-enabled yes --cluster-config-file nodes.conf \
-#  #--cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-6 \
-#  #--cluster-announce-port 7006 --cluster-announce-bus-port 17006
-#
-#  redis-node-1:
-#    image: redis:8.0
-#    container_name: redis-node-1
-#    command: [
-#      "redis-server", "--port", "7001", "--cluster-enabled", "yes", "--cluster-config-file",
-#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
-#      "redis-node-1", "--cluster-announce-port", "7001", "--cluster-announce-bus-port", "17001",
-#    ]
-#    ports:
-#      - "7001:7001"
-#    networks:
-#      - redis-cluster-net
-#    healthcheck:
-#      test: ["CMD-SHELL , "redis-cli -p 700 ping | grep PONG3s
-#      timeout: 3s
-#      retries: 5
-#
-#  redis-node-2:
-#    image: redis:8.0
-#    container_name: redis-node-2
-#    command: [
-#      "redis-server", "--port", "7002", "--cluster-enabled", "yes", "--cluster-config-file",
-#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
-#      "redis-node-2", "--cluster-announce-port", "7002", "--cluster-announce-bus-port", "17002",
-#    ]
-#    ports:
-#      - "7002:7002"
-#    networks:
-#      - redis-cluster-net
-#    healthcheck:
-#      test: ["CMD-SHELL , "redis-cli -p 700 ping | grep PONG3s
-#      timeout: 3s
-#      retries: 5
-#
-#  redis-node-3:
-#    image: redis:8.0
-#    container_name: redis-node-3
-#    command: [
-#      "redis-server", "--port", "7003", "--cluster-enabled", "yes", "--cluster-config-file",
-#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
-#      "redis-node-3", "--cluster-announce-port", "7003", "--cluster-announce-bus-port", "17003",
-#    ]
-#    ports:
-#      - "7003:7003"
-#    networks:
-#      - redis-cluster-net
-#    healthcheck:
-#      test: ["CMD-SHELL , "redis-cli -p 700 ping | grep PONG3s
-#      timeout: 3s
-#      retries: 5
-#
-#  redis-node-4:
-#    image: redis:8.0
-#    container_name: redis-node-4
-#    command: [
-#      "redis-server", "--port", "7004", "--cluster-enabled", "yes", "--cluster-config-file",
-#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
-#      "redis-node-4", "--cluster-announce-port", "7004", "--cluster-announce-bus-port", "17004",
-#    ]
-#    ports:
-#      - "7004:7004"
-#    networks:
-#      - redis-cluster-net
-#    healthcheck:
-#      test: ["CMD-SHELL , "redis-cli -p 700 ping | grep PONG3s
-#      timeout: 3s
-#      retries: 5
-#
-#  redis-node-5:
-#    image: redis:8.0
-#    container_name: redis-node-5
-#    command: [
-#      "redis-server", "--port", "7005", "--cluster-enabled", "yes", "--cluster-config-file",
-#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
-#      "redis-node-5", "--cluster-announce-port", "7005", "--cluster-announce-bus-port", "17005",
-#    ]
-#    ports:
-#      - "7005:7005"
-#    networks:
-#      - redis-cluster-net
-#    healthcheck:
-#      test: ["CMD-SHELL , "redis-cli -p 700 ping | grep PONG3s
-#      timeout: 3s
-#      retries: 5
-#
-#  redis-node-6:
-#    image: redis:8.0
-#    container_name: redis-node-6
-#    command: [
-#      "redis-server", "--port", "7006", "--cluster-enabled", "yes", "--cluster-config-file",
-#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
-#      "redis-node-6", "--cluster-announce-port", "7006", "--cluster-announce-bus-port", "17006",
-#    ]
-#    ports:
-#      - "7006:7006"
-#    networks:
-#      - redis-cluster-net
-#    healthcheck:
-#      test: ["CMD-SHELL , "redis-cli -p 700 ping | grep PONG3s
-#      timeout: 3s
-#      retries: 5
-#
-#  redis-cluster-init:
-#    image: redis:8.0
-#    container_name: redis-cluster-init
-#    depends_on:
-#      redis-node-1:
-#        condition: service_healthy
-#      redis-node-2:
-#        condition: service_healthy
-#      redis-node-3:
-#        condition: service_healthy
-#      redis-node-4:
-#        condition: service_healthy
-#      redis-node-5:
-#        condition: service_healthy
-#      redis-node-6:
-#        condition: service_healthy
-#    networks:
-#      - redis-cluster-net
-#    entrypoint: ["sh", "-c", "yes yes | redis-cli --cluster create redis-node-1:7001
-#     redis-node-2:7002 redis-node-3:7003 redis-node-4:7004
-#      redis-node-5:7005 redis-node-6:7006 --cluster-replicas 1"]
-#
-#networks:
-#  redis-cluster-net:
-#    driver: bridge
-name: notification-service
+# TODO: сделать поддержку переменных окружения
+
+#name: notification-SMTPClient
+
+networks:
+  notification-service-net:
+    driver: bridge
 
 services:
+  notification-service:
+    container_name: notification-service
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - "8080:8080"
+      - "2112:2112"
+    networks:
+      - notification-service-net
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v3.4.2
+    ports:
+      - "9090:9090"
+    networks:
+      - notification-service-net
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:12.0.2
+    ports:
+      - "3000:3000"
+    networks:
+      - notification-service-net
+
   redis-node-1:
     image: redis:8.0
     container_name: redis-node-1
-    network_mode: host
     command: [
-      "redis-server",  "--port", "7001", "--cluster-enabled", "yes", "--cluster-config-file",
-      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
-      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7001", "--cluster-announce-bus-port", "17001"
-    ]
+        "redis-server", "--port", "7001", "--cluster-enabled", "yes", "--cluster-config-file",
+        "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
+        "redis-node-1", "--cluster-announce-port", "7001", "--cluster-announce-bus-port", "17001",
+      ]
+    ports:
+      - "7001:7001"
+    networks:
+      - notification-service-net
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -p 7001 ping | grep PONG"]
-      interval: 3s
       timeout: 3s
       retries: 5
 
   redis-node-2:
     image: redis:8.0
     container_name: redis-node-2
-    network_mode: host
     command: [
       "redis-server", "--port", "7002", "--cluster-enabled", "yes", "--cluster-config-file",
-      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
-      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7002", "--cluster-announce-bus-port", "17002"
+      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
+      "redis-node-2", "--cluster-announce-port", "7002", "--cluster-announce-bus-port", "17002",
     ]
+    ports:
+      - "7002:7002"
+    networks:
+      - notification-service-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 7002 ping | grep PONG"]
-      interval: 3s
+      test: [ "CMD-SHELL", "redis-cli -p 7002 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
   redis-node-3:
     image: redis:8.0
     container_name: redis-node-3
-    network_mode: host
     command: [
       "redis-server", "--port", "7003", "--cluster-enabled", "yes", "--cluster-config-file",
-      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
-      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7003", "--cluster-announce-bus-port", "17003"
+      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
+      "redis-node-3", "--cluster-announce-port", "7003", "--cluster-announce-bus-port", "17003",
     ]
+    ports:
+      - "7003:7003"
+    networks:
+      - notification-service-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 7003 ping | grep PONG"]
-      interval: 3s
+      test: [ "CMD-SHELL", "redis-cli -p 7003 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
   redis-node-4:
     image: redis:8.0
     container_name: redis-node-4
-    network_mode: host
     command: [
       "redis-server", "--port", "7004", "--cluster-enabled", "yes", "--cluster-config-file",
-      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
-      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7004", "--cluster-announce-bus-port", "17004"
+      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
+      "redis-node-4", "--cluster-announce-port", "7004", "--cluster-announce-bus-port", "17004",
     ]
+    ports:
+      - "7004:7004"
+    networks:
+      - notification-service-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 7004 ping | grep PONG"]
-      interval: 3s
+      test: [ "CMD-SHELL", "redis-cli -p 7004 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
   redis-node-5:
     image: redis:8.0
     container_name: redis-node-5
-    network_mode: host
     command: [
       "redis-server", "--port", "7005", "--cluster-enabled", "yes", "--cluster-config-file",
-      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
-      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7005", "--cluster-announce-bus-port", "17005"
+      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
+      "redis-node-5", "--cluster-announce-port", "7005", "--cluster-announce-bus-port", "17005",
     ]
+    ports:
+      - "7005:7005"
+    networks:
+      - notification-service-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 7005 ping | grep PONG"]
-      interval: 3s
+      test: [ "CMD-SHELL", "redis-cli -p 7005 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
   redis-node-6:
     image: redis:8.0
     container_name: redis-node-6
-    network_mode: host
     command: [
       "redis-server", "--port", "7006", "--cluster-enabled", "yes", "--cluster-config-file",
-      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
-      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7006", "--cluster-announce-bus-port", "17006"
+      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes", "--cluster-announce-ip",
+      "redis-node-6", "--cluster-announce-port", "7006", "--cluster-announce-bus-port", "17006",
     ]
+    ports:
+      - "7006:7006"
+    networks:
+      - notification-service-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 7006 ping | grep PONG"]
-      interval: 3s
+      test: [ "CMD-SHELL", "redis-cli -p 7006 ping | grep PONG" ]
       timeout: 3s
       retries: 5
+
+
+
+
+#  redis-node-1:
+#    image: redis:8.0
+#    container_name: redis-node-1
+#    network_mode: host
+#    command: [
+#      "redis-server",  "--port", "7001", "--cluster-enabled", "yes", "--cluster-config-file",
+#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
+#      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7001", "--cluster-announce-bus-port", "17001"
+#    ]
+#    healthcheck:
+#      test: ["CMD-SHELL", "redis-cli -p 7001 ping | grep PONG"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5
+#
+#  redis-node-2:
+#    image: redis:8.0
+#    container_name: redis-node-2
+#    network_mode: host
+#    command: [
+#      "redis-server", "--port", "7002", "--cluster-enabled", "yes", "--cluster-config-file",
+#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
+#      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7002", "--cluster-announce-bus-port", "17002"
+#    ]
+#    healthcheck:
+#      test: ["CMD-SHELL", "redis-cli -p 7002 ping | grep PONG"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5
+#
+#  redis-node-3:
+#    image: redis:8.0
+#    container_name: redis-node-3
+#    network_mode: host
+#    command: [
+#      "redis-server", "--port", "7003", "--cluster-enabled", "yes", "--cluster-config-file",
+#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
+#      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7003", "--cluster-announce-bus-port", "17003"
+#    ]
+#    healthcheck:
+#      test: ["CMD-SHELL", "redis-cli -p 7003 ping | grep PONG"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5
+#
+#  redis-node-4:
+#    image: redis:8.0
+#    container_name: redis-node-4
+#    network_mode: host
+#    command: [
+#      "redis-server", "--port", "7004", "--cluster-enabled", "yes", "--cluster-config-file",
+#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
+#      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7004", "--cluster-announce-bus-port", "17004"
+#    ]
+#    healthcheck:
+#      test: ["CMD-SHELL", "redis-cli -p 7004 ping | grep PONG"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5
+#
+#  redis-node-5:
+#    image: redis:8.0
+#    container_name: redis-node-5
+#    network_mode: host
+#    command: [
+#      "redis-server", "--port", "7005", "--cluster-enabled", "yes", "--cluster-config-file",
+#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
+#      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7005", "--cluster-announce-bus-port", "17005"
+#    ]
+#    healthcheck:
+#      test: ["CMD-SHELL", "redis-cli -p 7005 ping | grep PONG"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5
+#
+#  redis-node-6:
+#    image: redis:8.0
+#    container_name: redis-node-6
+#    network_mode: host
+#    command: [
+#      "redis-server", "--port", "7006", "--cluster-enabled", "yes", "--cluster-config-file",
+#      "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "yes",
+#      "--cluster-announce-ip", "127.0.0.1", "--cluster-announce-port", "7006", "--cluster-announce-bus-port", "17006"
+#    ]
+#    healthcheck:
+#      test: ["CMD-SHELL", "redis-cli -p 7006 ping | grep PONG"]
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5

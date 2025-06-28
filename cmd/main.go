@@ -13,14 +13,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
 	"notification/internal/config"
 	llogger "notification/internal/logger"
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api/handlers"
-	"notification/internal/notification/service"
 	wworker "notification/internal/notification/worker"
-	"notification/internal/rds"
+	"notification/internal/redisClient"
 )
 
 const (
@@ -47,12 +48,12 @@ func main() {
 	}
 	defer logger.Sync()
 
-	redisClient, err := rds.New(ctx, &cfg.Redis, logger)
+	redisClient, err := redisClient.New(ctx, &cfg.Redis, logger)
 	if err != nil {
-		logger.Fatal("cannot initialize rds client", zap.Error(err))
+		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
-	smtpClient := service.New(&cfg.SMTP, logger)
+	smtpClient := SMTPClient.New(&cfg.SMTP, logger)
 
 	worker := wworker.New(logger, redisClient, smtpClient, tickTimeForWorker)
 
@@ -69,6 +70,14 @@ func main() {
 		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),
 		Handler: router,
 	}
+
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		log.Println("metrics available at :2112/metrics")
+		if err := http.ListenAndServe(":2112", nil); err != nil {
+			log.Fatalf("cannot start metrics server: %v", err)
+		}
+	}()
 
 	go func() {
 		logger.Info("starting http server", zap.String("addr", srv.Addr))
@@ -95,7 +104,7 @@ func main() {
 	logger.Info("application shutdown completed successfully")
 }
 
-func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMTPClient, redisClient *rds.RedisCluster) *chi.Mux {
+func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient, redisClient *redisClient.RedisCluster) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -110,7 +119,8 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMT
 	return router
 }
 
-// TODO: покрыть тестами ВСЁ
+// TODO: механизм отказоустойчивости (постоянное переподключение к редису и тд)
+// TODO: покрыть тестами ВСЁ, нагрузочные тесты?
 // TODO: дополнить README, написать документацию
 // TODO: добавить в stage сборку прогон тестов
 
@@ -118,6 +128,6 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *service.SMT
 // TODO: попробовать на аккаунте лицея
 // TODO: github actions
 
-// TODO: мониторинг в целом и редиса, nginx, kafka
+// TODO: мониторинг в целом и редиса, kubernetes, nginx, kafka
 // TODO: многопоточность
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?
