@@ -19,8 +19,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
-	"notification/internal/notification/service"
 )
 
 func TestAddDelayedEmail(t *testing.T) {
@@ -33,15 +33,15 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		email     *service.EmailMessageWithTime
+		email     *SMTPClient.EmailMessageWithTime
 		wantEmail []string
 		wantErr   error
 	}{
 		{
 			name: "success add",
-			email: &service.EmailMessageWithTime{
+			email: &SMTPClient.EmailMessageWithTime{
 				Time: "2025-12-02 15:04:05",
-				Email: service.EmailMessage{
+				Email: SMTPClient.EmailMessage{
 					To:      "daanisimov04@gmail.com",
 					Subject: "subject",
 					Message: "message",
@@ -80,9 +80,9 @@ func TestAddDelayedEmailTimeout(t *testing.T) {
 		Logger:  zap.NewNop(),
 	}
 
-	email := &service.EmailMessageWithTime{
+	email := &SMTPClient.EmailMessageWithTime{
 		Time: "2026-01-01 01:01:01",
-		Email: service.EmailMessage{
+		Email: SMTPClient.EmailMessage{
 			To:      "daanisimov04@gmail.com",
 			Subject: "test",
 			Message: "message",
@@ -230,14 +230,14 @@ func TestParseAndConvertTime(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		email       *service.EmailMessageWithTime
+		email       *SMTPClient.EmailMessageWithTime
 		expectedErr bool
 	}{
 		{
 			name: "success",
-			email: &service.EmailMessageWithTime{
+			email: &SMTPClient.EmailMessageWithTime{
 				Time: "2035-06-27 15:04:05",
-				Email: service.EmailMessage{
+				Email: SMTPClient.EmailMessage{
 					To:      "test@gmail.com",
 					Subject: "subject",
 					Message: "message",
@@ -247,9 +247,9 @@ func TestParseAndConvertTime(t *testing.T) {
 		},
 		{
 			name: "invalid time",
-			email: &service.EmailMessageWithTime{
+			email: &SMTPClient.EmailMessageWithTime{
 				Time: "invalid time",
-				Email: service.EmailMessage{
+				Email: SMTPClient.EmailMessage{
 					To:      "test@gmail.com",
 					Subject: "subject",
 					Message: "message",
@@ -275,7 +275,7 @@ func TestParseAndConvertTime(t *testing.T) {
 
 				assert.Equal(t, float64(wantScore.Unix()), score)
 
-				var wantEmail service.EmailMessageWithTime
+				var wantEmail SMTPClient.EmailMessageWithTime
 				err = json.Unmarshal(res, &wantEmail)
 				require.NoError(t, err)
 				assert.Equal(t, wantEmail.Email, tt.email.Email)
