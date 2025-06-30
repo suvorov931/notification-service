@@ -46,7 +46,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if err = logger.Sync(); err != nil {
+			logger.Error("cannot sync logger: %v", zap.Error(err))
+		}
+	}()
 
 	redisClient, err := redisClient.New(ctx, &cfg.Redis, logger)
 	if err != nil {

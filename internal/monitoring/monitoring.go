@@ -2,23 +2,51 @@ package monitoring
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	_ "github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var (
-	RedisSuccessCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "redis_success_total",
-		Help: "Total number of successful Redis operations",
-	})
+// import _ "github.com/prometheus/client_golang/prometheus/promauto"
+// import "github.com/prometheus/client_golang/prometheus/collectors"
+// алерты
+// prometheus.MustRegister(collectors.NewGoCollector())
+// prometheus.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+const (
+	StatusSuccess = "success"
+	StatusError   = "error"
+	StatusTimeout = "timeout"
+)
 
-	RedisErrorCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "redis_error_total",
-		Help: "Total number of error Redis operations",
-	})
+type Metrics struct {
+	Counter  *prometheus.CounterVec
+	Duration *prometheus.HistogramVec
+}
 
-	RedisLatencyHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name:    "redis_operation_duration_seconds",
-		Help:    "Duration of Redis operations in seconds",
+func NewRedisMetrics(name string) *Metrics {
+	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: name + "_operations_total",
+		Help: "Total count of " + name + " operations",
+	},
+		[]string{"operation", "status"})
+
+	duration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    name + "_operation_duration_seconds",
+		Help:    "Duration of " + name + " operations",
 		Buckets: prometheus.DefBuckets,
-	})
-)
+	},
+		[]string{"operation"})
+
+	prometheus.MustRegister(counter, duration)
+
+	return &Metrics{
+		Counter:  counter,
+		Duration: duration,
+	}
+}
+
+func (m *Metrics) Inc(operation string, status string) {
+	m.Counter.WithLabelValues(operation, status).Inc()
+}
+
+func (m *Metrics) Observe(operation string, duration float64) {
+	m.Duration.WithLabelValues(operation).Observe(duration)
+}

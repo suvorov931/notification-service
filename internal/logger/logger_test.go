@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func TestNew(t *testing.T) {
@@ -85,7 +86,9 @@ func TestMiddlewareLogger(t *testing.T) {
 
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				if _, err = w.Write([]byte("OK")); err != nil {
+					logger.Warn("cannot write response", zap.Error(err))
+				}
 			})
 
 			middlewareHandler := MiddlewareLogger(logger, cfg)(nextHandler)

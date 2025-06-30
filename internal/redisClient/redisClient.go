@@ -30,11 +30,10 @@ type Config struct {
 
 type RedisCluster struct {
 	Cluster *redis.ClusterClient
+	Metrics *monitoring.Metrics
 	Logger  *zap.Logger
 	Timeout time.Duration
 }
-
-// TODO: rename package to RedisCluster/RedisClient?
 
 func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisCluster, error) {
 	if cfg.Timeout == 0 {
@@ -54,8 +53,11 @@ func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisCluster, e
 		return nil, fmt.Errorf("failed to connect to redis cluster: %w", err)
 	}
 
+	metrics := monitoring.NewRedisMetrics("Redis")
+
 	return &RedisCluster{
 		Cluster: cluster,
+		Metrics: metrics,
 		Logger:  logger,
 		Timeout: cfg.Timeout,
 	}, nil
@@ -65,38 +67,37 @@ func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.E
 	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
 	defer cancel()
 
-	start := time.Now()
-
 	emailJSON, score, err := rc.parseAndConvertTime(email)
 	if err != nil {
-		monitoring.RedisErrorCounter.Inc()
 		rc.Logger.Error(err.Error())
 		return err
 	}
+
+	start := time.Now()
 
 	err = rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 		Score:  score,
 		Member: emailJSON,
 	}).Err()
 
-	duration := time.Since(start).Milliseconds()
-	monitoring.RedisLatencyHistogram.Observe(float64(duration))
+	duration := time.Since(start).Seconds()
+	rc.Metrics.Observe("ZAdd", duration)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			monitoring.RedisErrorCounter.Inc()
+			rc.Metrics.Inc("ZAdd", monitoring.StatusTimeout)
 			rc.Logger.Error("AddDelayedEmail: deadline exceeded", zap.Error(err))
 			return fmt.Errorf("AddDelayedEmail: %w", context.DeadlineExceeded)
 
 		default:
-			monitoring.RedisErrorCounter.Inc()
+			rc.Metrics.Inc("ZAdd", monitoring.StatusError)
 			rc.Logger.Error("AddDelayedEmail: cannot get entry", zap.Error(err))
 			return err
 		}
 	}
 
-	monitoring.RedisSuccessCounter.Inc()
+	rc.Metrics.Inc("ZAdd", monitoring.StatusSuccess)
 	return nil
 }
 
@@ -104,41 +105,49 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
 	defer cancel()
 
-	start := time.Now()
-
 	now := float64(time.Now().Unix())
+
+	start := time.Now()
 
 	res, err := rc.Cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 		Min: "-inf",
 		Max: strconv.FormatFloat(now, 'f', -1, 64),
 	}).Result()
 
-	duration := time.Since(start).Milliseconds()
-	monitoring.RedisLatencyHistogram.Observe(float64(duration))
+	duration := time.Since(start).Seconds()
+	rc.Metrics.Observe("ZRangeByScore", duration)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			monitoring.RedisErrorCounter.Inc()
+			rc.Metrics.Inc("ZRangeByScore", monitoring.StatusTimeout)
 			rc.Logger.Error("CheckRedis: deadline exceeded", zap.Error(err))
 			return nil, fmt.Errorf("CheckRedis: %w", context.DeadlineExceeded)
 
 		default:
-			monitoring.RedisErrorCounter.Inc()
+			rc.Metrics.Inc("ZRangeByScore", monitoring.StatusError)
 			rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
 			return nil, err
 		}
 	}
 
 	if len(res) != 0 {
-		monitoring.RedisErrorCounter.Inc()
+		start = time.Now()
+
 		err = rc.Cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
+
+		duration = time.Since(start).Seconds()
+		rc.Metrics.Observe("ZRem", duration)
+
 		if err != nil {
+			rc.Metrics.Inc("ZRem", monitoring.StatusError)
 			rc.Logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
+		} else {
+			rc.Metrics.Inc("ZRem", monitoring.StatusSuccess)
 		}
 	}
 
-	monitoring.RedisSuccessCounter.Inc()
+	rc.Metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
 	return res, nil
 }
 

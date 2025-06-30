@@ -7,4 +7,4 @@ scrape_configs:
     scrape_interval: 5s
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['notification-service-notification-service:2112']
+      - targets: ['notification-service:2112']

@@ -21,12 +21,17 @@ services:
   prometheus:
     container_name: prometheus
     image: prom/prometheus:v3.4.2
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - "9090:9090"
     networks:
       - notification-service-net
-    volumes:
-      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml
 
   grafana:
     container_name: grafana
