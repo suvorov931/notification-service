@@ -29,7 +29,7 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	addrs := upRedisCluster(ctx, "TestAddDelayedEmail", 1, t)
 
-	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNopMetrics(), zap.NewNop())
+	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNop(), zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -79,7 +79,7 @@ func TestAddDelayedEmailTimeout(t *testing.T) {
 	rc := RedisCluster{
 		cluster: db,
 		logger:  zap.NewNop(),
-		metrics: monitoring.NewNopMetrics(),
+		metrics: monitoring.NewNop(),
 	}
 
 	email := &SMTPClient.EmailMessageWithTime{
@@ -109,7 +109,7 @@ func TestCheckRedis(t *testing.T) {
 
 	addrs := upRedisCluster(ctx, "TestCheckRedis", 2, t)
 
-	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNopMetrics(), zap.NewNop())
+	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNop(), zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -193,7 +193,7 @@ func TestCheckRedisTimeout(t *testing.T) {
 
 	rc := RedisCluster{
 		cluster: db,
-		metrics: monitoring.NewNopMetrics(),
+		metrics: monitoring.NewNop(),
 		logger:  zap.NewNop(),
 	}
 
@@ -221,7 +221,7 @@ func TestFailedConnection(t *testing.T) {
 		Password: "wrong",
 	}
 
-	_, err := New(ctx, cfg, monitoring.NewNopMetrics(), zap.NewNop())
+	_, err := New(ctx, cfg, monitoring.NewNop(), zap.NewNop())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to redis")
 }

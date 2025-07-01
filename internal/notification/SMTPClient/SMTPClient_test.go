@@ -14,6 +14,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/zap"
+
+	"notification/internal/monitoring"
 )
 
 // TODO: переехать на testify
@@ -61,7 +63,7 @@ func TestSendEmail(t *testing.T) {
 			SenderPassword:  "invalid",
 			MaxRetries:      2,
 			BasicRetryPause: 1,
-		}, zap.NewNop())
+		}, monitoring.NewNop(), zap.NewNop())
 
 		err := srv.SendEmail(ctx, EmailMessage{
 			To:      "daanisimov04@gmail.com",
@@ -80,7 +82,7 @@ func TestSendEmail(t *testing.T) {
 				SenderEmail: tt.from,
 				SMTPHost:    host,
 				SMTPPort:    port,
-			}, zap.NewNop())
+			}, monitoring.NewNop(), zap.NewNop())
 			err := srv.SendEmail(ctx, *tt.email)
 			time.Sleep(time.Second)
 

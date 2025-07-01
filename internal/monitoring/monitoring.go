@@ -27,6 +27,24 @@ type Metrics struct {
 	Duration *prometheus.HistogramVec
 }
 
+type AppMetrics struct {
+	RedisMetrics                   *Metrics
+	WorkerMetrics                  *Metrics
+	SMTPMetrics                    *Metrics
+	SendNotificationMetrics        *Metrics
+	SendNotificationViaTimeMetrics *Metrics
+}
+
+func NewAppMetrics() *AppMetrics {
+	return &AppMetrics{
+		RedisMetrics:                   New("Redis"),
+		WorkerMetrics:                  New("Worker"),
+		SMTPMetrics:                    New("SMTP"),
+		SendNotificationMetrics:        New("SendNotification"),
+		SendNotificationViaTimeMetrics: New("SendNotificationViaTime"),
+	}
+}
+
 func New(name string) *Metrics {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: name + "_operations_total",
@@ -59,7 +77,7 @@ func (m *Metrics) Observe(operation string, duration float64) {
 
 type NopMetrics struct{}
 
-func NewNopMetrics() *NopMetrics {
+func NewNop() *NopMetrics {
 	return &NopMetrics{}
 }
 

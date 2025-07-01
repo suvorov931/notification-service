@@ -46,7 +46,7 @@ type SMTPClient struct {
 	logger  *zap.Logger
 }
 
-func New(config *Config, logger *zap.Logger, metrics monitoring.Monitoring) *SMTPClient {
+func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMTPClient {
 	return &SMTPClient{
 		config:  config,
 		metrics: metrics,

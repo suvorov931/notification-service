@@ -53,15 +53,17 @@ func main() {
 		}
 	}()
 
-	metricsForRedisClient := monitoring.New("redis")
-	redisClient, err := rredisClient.New(ctx, &config.Redis, metricsForRedisClient, logger)
+	appMetrics := monitoring.NewAppMetrics()
+
+	redisClient, err := rredisClient.New(ctx, &config.Redis, appMetrics.RedisMetrics, logger)
 	if err != nil {
 		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
-	smtpClient := SMTPClient.New(&config.SMTP, logger)
+	metricsForSMTPClient := monitoring.New("smtp")
+	smtpClient := SMTPClient.New(&config.SMTP, metricsForSMTPClient, logger)
 
-	worker := wworker.New(logger, redisClient, smtpClient, tickTimeForWorker)
+	worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
 
 	go func() {
 		err = worker.Run(ctx)
@@ -70,7 +72,7 @@ func main() {
 		}
 	}()
 
-	router := initRouter(logger, &config.Logger, smtpClient, redisClient)
+	router := initRouter(logger, &config.Logger, smtpClient, redisClient, appMetrics)
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port),
@@ -110,7 +112,7 @@ func main() {
 }
 
 func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient,
-	redisClient *rredisClient.RedisCluster) *chi.Mux {
+	redisClient *rredisClient.RedisCluster, appMetrics *monitoring.AppMetrics) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -119,10 +121,8 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	metricsForSendNotification := monitoring.New("SendNotification")
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(logger, smtpClient, metricsForSendNotification))
-	metricsForSendNotificationViaTime := monitoring.New("SendNotificationViaTime")
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(logger, redisClient, metricsForSendNotificationViaTime))
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(logger, smtpClient, appMetrics.SendNotificationMetrics))
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(logger, redisClient, appMetrics.SendNotificationViaTimeMetrics))
 
 	return router
 }

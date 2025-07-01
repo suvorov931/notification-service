@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"notification/internal/monitoring"
 	"notification/internal/notification/SMTPClient"
 )
 
@@ -110,10 +111,11 @@ func TestWorker(t *testing.T) {
 		wg.Add(2)
 
 		wrk := New(
-			zap.NewNop(),
 			mockRedis,
 			mockSender,
 			100*time.Millisecond,
+			monitoring.NewNop(),
+			zap.NewNop(),
 		)
 
 		mockSender.On("SendEmail", mock.Anything, SMTPClient.EmailMessage{
@@ -173,10 +175,11 @@ func TestWorker(t *testing.T) {
 			}
 
 			wrk := New(
-				zap.NewNop(),
 				mockRedis,
 				mockSender,
 				100*time.Millisecond,
+				monitoring.NewNop(),
+				zap.NewNop(),
 			)
 
 			go func() {
@@ -224,10 +227,11 @@ func TestWorkerContextCancel(t *testing.T) {
 	mockRedis.On("CheckRedis", mock.Anything).Return([]string{}, nil)
 
 	wrk := New(
-		zap.NewNop(),
 		mockRedis,
 		mockSender,
 		100*time.Millisecond,
+		monitoring.NewNop(),
+		zap.NewNop(),
 	)
 
 	go func() {

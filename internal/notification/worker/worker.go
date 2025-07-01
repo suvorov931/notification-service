@@ -18,19 +18,20 @@ type RedisChecker interface {
 }
 
 type Worker struct {
-	logger       *zap.Logger
 	rc           RedisChecker
 	sender       SMTPClient.EmailSender
-	metrics      *monitoring.Metrics
+	metrics      monitoring.Monitoring
+	logger       *zap.Logger
 	tickDuration time.Duration
 }
 
-func New(logger *zap.Logger, rc RedisChecker, sender SMTPClient.EmailSender, tickDuration time.Duration) *Worker {
+func New(rc RedisChecker, sender SMTPClient.EmailSender, tickDuration time.Duration, metrics monitoring.Monitoring, logger *zap.Logger) *Worker {
 	return &Worker{
-		logger:       logger,
 		rc:           rc,
 		sender:       sender,
 		tickDuration: tickDuration,
+		metrics:      metrics,
+		logger:       logger,
 	}
 }
 
@@ -45,20 +46,43 @@ func (w *Worker) Run(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				w.metrics.Inc("Worker", monitoring.StatusCanceled)
 				w.logger.Info("Worker: context canceled")
 				return ctx.Err()
 
 			case <-ticker.C:
+
 				entries, err := w.rc.CheckRedis(ctx)
 				if err != nil {
+					w.metrics.Inc("Worker", monitoring.StatusError)
 					w.logger.Error("Worker: failed check redis", zap.Error(err))
+					continue
+				}
+
+				if len(entries) == 0 {
 					continue
 				}
 
 				entriesCopy := append([]string(nil), entries...)
 
+				w.logger.Info("Worker: got entries from redis", zap.Strings("entries", entriesCopy))
+
 				group.Go(func() error {
-					return w.processEntries(ctx, entriesCopy)
+					start := time.Now()
+
+					err := w.processEntries(ctx, entriesCopy)
+
+					duration := time.Since(start).Seconds()
+
+					if err != nil {
+						w.metrics.Inc("Worker", monitoring.StatusError)
+						w.logger.Error("Worker: failed process entries", zap.Error(err))
+						return err
+					}
+
+					w.metrics.Inc("Worker", monitoring.StatusSuccess)
+					w.metrics.Observe("Worker", duration)
+					return nil
 				})
 			}
 		}
@@ -66,10 +90,12 @@ func (w *Worker) Run(ctx context.Context) error {
 
 	if err := group.Wait(); err != nil {
 		if errors.Is(err, context.Canceled) {
+			w.metrics.Inc("Worker", monitoring.StatusCanceled)
 			w.logger.Info("Worker: graceful shutdown completed")
 			return nil
 		}
 
+		w.metrics.Inc("Worker", monitoring.StatusError)
 		w.logger.Error("Worker: shutting down with error", zap.Error(err))
 		return err
 	}
@@ -81,6 +107,7 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 	for _, entry := range entries {
 		select {
 		case <-ctx.Done():
+			w.metrics.Inc("Worker", monitoring.StatusCanceled)
 			w.logger.Info("processEntries: context canceled")
 			return ctx.Err()
 
@@ -89,11 +116,13 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 			var res SMTPClient.EmailMessageWithTime
 
 			if err := json.Unmarshal([]byte(entry), &res); err != nil {
+				w.metrics.Inc("Worker", monitoring.StatusError)
 				w.logger.Error("parseAndSendEntry: failed to unmarshal entry", zap.Error(err), zap.String("entry", entry))
 				continue
 			}
 
 			if err := w.sender.SendEmail(ctx, res.Email); err != nil {
+				w.metrics.Inc("Worker", monitoring.StatusError)
 				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", res.Email))
 				continue
 			}
