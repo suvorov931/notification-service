@@ -19,6 +19,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/monitoring"
 	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api"
 )
@@ -28,7 +29,7 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	addrs := upRedisCluster(ctx, "TestAddDelayedEmail", 1, t)
 
-	rc, err := New(ctx, &Config{Addrs: addrs}, zap.NewNop())
+	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNopMetrics(), zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -59,7 +60,7 @@ func TestAddDelayedEmail(t *testing.T) {
 				t.Errorf("AddDelayedEmail() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			email, err := rc.Cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+			email, err := rc.cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 				Min: tt.email.Time,
 				Max: tt.email.Time,
 			}).Result()
@@ -76,8 +77,9 @@ func TestAddDelayedEmailTimeout(t *testing.T) {
 	db, rdsMock := redismock.NewClusterMock()
 
 	rc := RedisCluster{
-		Cluster: db,
-		Logger:  zap.NewNop(),
+		cluster: db,
+		logger:  zap.NewNop(),
+		metrics: monitoring.NewNopMetrics(),
 	}
 
 	email := &SMTPClient.EmailMessageWithTime{
@@ -107,7 +109,7 @@ func TestCheckRedis(t *testing.T) {
 
 	addrs := upRedisCluster(ctx, "TestCheckRedis", 2, t)
 
-	rc, err := New(ctx, &Config{Addrs: addrs}, zap.NewNop())
+	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNopMetrics(), zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -155,7 +157,7 @@ func TestCheckRedis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
+			err = rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
 			require.NoError(t, err)
 
 			res, err := rc.CheckRedis(ctx)
@@ -163,12 +165,12 @@ func TestCheckRedis(t *testing.T) {
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.want, res)
 
-			tt.delFunc(*rc.Cluster)
+			tt.delFunc(*rc.cluster)
 		})
 	}
 
 	t.Run("check removal after reading", func(t *testing.T) {
-		err := rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+		err := rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 			Score:  float64(time.Now().Unix()),
 			Member: "something",
 		}).Err()
@@ -178,7 +180,7 @@ func TestCheckRedis(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"something"}, res)
 
-		emptyRes, err := rc.Cluster.ZRange(ctx, api.KeyForDelayedSending, 0, -1).Result()
+		emptyRes, err := rc.cluster.ZRange(ctx, api.KeyForDelayedSending, 0, -1).Result()
 		require.NoError(t, err)
 		assert.Equal(t, []string{}, emptyRes)
 
@@ -190,8 +192,9 @@ func TestCheckRedisTimeout(t *testing.T) {
 	db, rdsMock := redismock.NewClusterMock()
 
 	rc := RedisCluster{
-		Cluster: db,
-		Logger:  zap.NewNop(),
+		cluster: db,
+		metrics: monitoring.NewNopMetrics(),
+		logger:  zap.NewNop(),
 	}
 
 	now := float64(time.Now().Unix())
@@ -218,14 +221,14 @@ func TestFailedConnection(t *testing.T) {
 		Password: "wrong",
 	}
 
-	_, err := New(ctx, cfg, zap.NewNop())
+	_, err := New(ctx, cfg, monitoring.NewNopMetrics(), zap.NewNop())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to redis")
 }
 
 func TestParseAndConvertTime(t *testing.T) {
 	rc := RedisCluster{
-		Logger: zap.NewNop(),
+		logger: zap.NewNop(),
 	}
 
 	tests := []struct {

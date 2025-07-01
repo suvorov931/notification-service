@@ -11,17 +11,23 @@ import (
 // prometheus.MustRegister(collectors.NewGoCollector())
 // prometheus.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 const (
-	StatusSuccess = "success"
-	StatusError   = "error"
-	StatusTimeout = "timeout"
+	StatusSuccess  = "success"
+	StatusError    = "error"
+	StatusCanceled = "canceled"
+	StatusTimeout  = "timeout"
 )
+
+type Monitoring interface {
+	Inc(operation string, status string)
+	Observe(operation string, duration float64)
+}
 
 type Metrics struct {
 	Counter  *prometheus.CounterVec
 	Duration *prometheus.HistogramVec
 }
 
-func NewRedisMetrics(name string) *Metrics {
+func New(name string) *Metrics {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: name + "_operations_total",
 		Help: "Total count of " + name + " operations",
@@ -50,3 +56,12 @@ func (m *Metrics) Inc(operation string, status string) {
 func (m *Metrics) Observe(operation string, duration float64) {
 	m.Duration.WithLabelValues(operation).Observe(duration)
 }
+
+type NopMetrics struct{}
+
+func NewNopMetrics() *NopMetrics {
+	return &NopMetrics{}
+}
+
+func (nm *NopMetrics) Inc(operation string, status string)        {}
+func (nm *NopMetrics) Observe(operation string, duration float64) {}

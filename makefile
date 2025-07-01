@@ -22,6 +22,5 @@ start-monitoring:
 
 start-app:
 	docker-compose up --build -d notification-service
-	#docker-compose up -d notification-service
 
 all: start-redis-nods init-redis-cluster set-cluster-passwords start-monitoring start-app

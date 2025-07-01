@@ -29,13 +29,13 @@ type Config struct {
 }
 
 type RedisCluster struct {
-	Cluster *redis.ClusterClient
-	Metrics *monitoring.Metrics
-	Logger  *zap.Logger
-	Timeout time.Duration
+	cluster *redis.ClusterClient
+	metrics monitoring.Monitoring
+	logger  *zap.Logger
+	timeout time.Duration
 }
 
-func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisCluster, error) {
+func New(ctx context.Context, cfg *Config, metrics monitoring.Monitoring, logger *zap.Logger) (*RedisCluster, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = DefaultRedisTimeout
 	}
@@ -53,80 +53,78 @@ func New(ctx context.Context, cfg *Config, logger *zap.Logger) (*RedisCluster, e
 		return nil, fmt.Errorf("failed to connect to redis cluster: %w", err)
 	}
 
-	metrics := monitoring.NewRedisMetrics("Redis")
-
 	return &RedisCluster{
-		Cluster: cluster,
-		Metrics: metrics,
-		Logger:  logger,
-		Timeout: cfg.Timeout,
+		cluster: cluster,
+		metrics: metrics,
+		logger:  logger,
+		timeout: cfg.Timeout,
 	}, nil
 }
 
 func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
-	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
 
 	emailJSON, score, err := rc.parseAndConvertTime(email)
 	if err != nil {
-		rc.Logger.Error(err.Error())
+		rc.logger.Error(err.Error())
 		return err
 	}
 
 	start := time.Now()
 
-	err = rc.Cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+	err = rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 		Score:  score,
 		Member: emailJSON,
 	}).Err()
 
 	duration := time.Since(start).Seconds()
-	rc.Metrics.Observe("ZAdd", duration)
+	rc.metrics.Observe("ZAdd", duration)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			rc.Metrics.Inc("ZAdd", monitoring.StatusTimeout)
-			rc.Logger.Error("AddDelayedEmail: deadline exceeded", zap.Error(err))
+			rc.metrics.Inc("ZAdd", monitoring.StatusTimeout)
+			rc.logger.Error("AddDelayedEmail: deadline exceeded", zap.Error(err))
 			return fmt.Errorf("AddDelayedEmail: %w", context.DeadlineExceeded)
 
 		default:
-			rc.Metrics.Inc("ZAdd", monitoring.StatusError)
-			rc.Logger.Error("AddDelayedEmail: cannot get entry", zap.Error(err))
+			rc.metrics.Inc("ZAdd", monitoring.StatusError)
+			rc.logger.Error("AddDelayedEmail: cannot get entry", zap.Error(err))
 			return err
 		}
 	}
 
-	rc.Metrics.Inc("ZAdd", monitoring.StatusSuccess)
+	rc.metrics.Inc("ZAdd", monitoring.StatusSuccess)
 	return nil
 }
 
 func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, rc.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
 
 	now := float64(time.Now().Unix())
 
 	start := time.Now()
 
-	res, err := rc.Cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+	res, err := rc.cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 		Min: "-inf",
 		Max: strconv.FormatFloat(now, 'f', -1, 64),
 	}).Result()
 
 	duration := time.Since(start).Seconds()
-	rc.Metrics.Observe("ZRangeByScore", duration)
+	rc.metrics.Observe("ZRangeByScore", duration)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			rc.Metrics.Inc("ZRangeByScore", monitoring.StatusTimeout)
-			rc.Logger.Error("CheckRedis: deadline exceeded", zap.Error(err))
+			rc.metrics.Inc("ZRangeByScore", monitoring.StatusTimeout)
+			rc.logger.Error("CheckRedis: deadline exceeded", zap.Error(err))
 			return nil, fmt.Errorf("CheckRedis: %w", context.DeadlineExceeded)
 
 		default:
-			rc.Metrics.Inc("ZRangeByScore", monitoring.StatusError)
-			rc.Logger.Error("CheckRedis: cannot get entry", zap.Error(err))
+			rc.metrics.Inc("ZRangeByScore", monitoring.StatusError)
+			rc.logger.Error("CheckRedis: cannot get entry", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -134,27 +132,27 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	if len(res) != 0 {
 		start = time.Now()
 
-		err = rc.Cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
+		err = rc.cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
 
 		duration = time.Since(start).Seconds()
-		rc.Metrics.Observe("ZRem", duration)
+		rc.metrics.Observe("ZRem", duration)
 
 		if err != nil {
-			rc.Metrics.Inc("ZRem", monitoring.StatusError)
-			rc.Logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
+			rc.metrics.Inc("ZRem", monitoring.StatusError)
+			rc.logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
 		} else {
-			rc.Metrics.Inc("ZRem", monitoring.StatusSuccess)
+			rc.metrics.Inc("ZRem", monitoring.StatusSuccess)
 		}
 	}
 
-	rc.Metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
+	rc.metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
 	return res, nil
 }
 
 func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessageWithTime) ([]byte, float64, error) {
 	UTCTime, err := time.ParseInLocation(emailTimeLayout, email.Time, time.UTC)
 	if err != nil {
-		rc.Logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
+		rc.logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
 
 		return nil, 0, fmt.Errorf("parseAndConvertTime: cannot parse email.Time: %s: %w", email.Time, err)
 	}
@@ -163,7 +161,7 @@ func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessageWithTi
 
 	jsonEmail, err := json.Marshal(email)
 	if err != nil {
-		rc.Logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
+		rc.logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
 
 		return nil, 0, err
 	}

@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"notification/internal/monitoring"
 	"notification/internal/notification/SMTPClient"
 )
 
@@ -20,6 +21,7 @@ type Worker struct {
 	logger       *zap.Logger
 	rc           RedisChecker
 	sender       SMTPClient.EmailSender
+	metrics      *monitoring.Metrics
 	tickDuration time.Duration
 }
 

@@ -16,12 +16,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
-	"notification/internal/config"
+	cconfig "notification/internal/config"
 	llogger "notification/internal/logger"
+	"notification/internal/monitoring"
 	"notification/internal/notification/SMTPClient"
 	"notification/internal/notification/api/handlers"
 	wworker "notification/internal/notification/worker"
-	"notification/internal/redisClient"
+	rredisClient "notification/internal/redisClient"
 )
 
 const (
@@ -37,27 +38,27 @@ func main() {
 	)
 	defer cancel()
 
-	cfg, err := config.New(pathToConfigFile)
+	config, err := cconfig.New(pathToConfigFile)
 	if err != nil {
 		log.Fatalf("cannot initialize config: %v", err)
 	}
 
-	logger, err := llogger.New(&cfg.Logger)
+	logger, err := llogger.New(&config.Logger)
 	if err != nil {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
 	defer func() {
 		if err = logger.Sync(); err != nil {
-			logger.Error("cannot sync logger: %v", zap.Error(err))
+			log.Printf("cannot sync logger: %v", err)
 		}
 	}()
 
-	redisClient, err := redisClient.New(ctx, &cfg.Redis, logger)
+	redisClient, err := rredisClient.New(ctx, &config.Redis, monitoring.New("redis"), logger)
 	if err != nil {
 		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
-	smtpClient := SMTPClient.New(&cfg.SMTP, logger)
+	smtpClient := SMTPClient.New(&config.SMTP, logger)
 
 	worker := wworker.New(logger, redisClient, smtpClient, tickTimeForWorker)
 
@@ -68,10 +69,10 @@ func main() {
 		}
 	}()
 
-	router := initRouter(logger, &cfg.Logger, smtpClient, redisClient)
+	router := initRouter(logger, &config.Logger, smtpClient, redisClient)
 
 	srv := http.Server{
-		Addr:    fmt.Sprintf("%s:%s", cfg.HttpServer.Host, cfg.HttpServer.Port),
+		Addr:    fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port),
 		Handler: router,
 	}
 
@@ -99,8 +100,7 @@ func main() {
 	logger.Info("shutting down http server")
 	if err = srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("cannot shutdown http server", zap.Error(err))
-	} else {
-		logger.Info("http server shutdown gracefully")
+		return
 	}
 
 	logger.Info("stopping http server", zap.String("addr", srv.Addr))
@@ -108,7 +108,8 @@ func main() {
 	logger.Info("application shutdown completed successfully")
 }
 
-func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient, redisClient *redisClient.RedisCluster) *chi.Mux {
+func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient,
+	redisClient *rredisClient.RedisCluster) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -124,14 +125,15 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 }
 
 // TODO: механизм отказоустойчивости (постоянное переподключение к редису и тд)
+// TODO: добавить хранилище отправленных сообщений через PostgreSQL
 // TODO: покрыть тестами ВСЁ, нагрузочные тесты?
 // TODO: дополнить README, написать документацию
 // TODO: добавить в stage сборку прогон тестов
 
 // TODO: GitLab CI/CD
 // TODO: попробовать на аккаунте лицея
-// TODO: github actions
+// TODO: GitHub Actions
 
-// TODO: мониторинг в целом и редиса, kubernetes, nginx, kafka
+// TODO: мониторинг, kubernetes, nginx, kafka
 // TODO: многопоточность
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?
