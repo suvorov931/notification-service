@@ -53,7 +53,8 @@ func main() {
 		}
 	}()
 
-	redisClient, err := rredisClient.New(ctx, &config.Redis, monitoring.New("redis"), logger)
+	metricsForRedisClient := monitoring.New("redis")
+	redisClient, err := rredisClient.New(ctx, &config.Redis, metricsForRedisClient, logger)
 	if err != nil {
 		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
@@ -118,8 +119,10 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(logger, smtpClient))
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(logger, redisClient))
+	metricsForSendNotification := monitoring.New("SendNotification")
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(logger, smtpClient, metricsForSendNotification))
+	metricsForSendNotificationViaTime := monitoring.New("SendNotificationViaTime")
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(logger, redisClient, metricsForSendNotificationViaTime))
 
 	return router
 }

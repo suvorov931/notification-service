@@ -10,22 +10,24 @@ import (
 
 	"go.uber.org/zap"
 	"gopkg.in/gomail.v2"
+
+	"notification/internal/monitoring"
 )
 
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
-	select {
-	case <-ctx.Done():
+	if ctx.Err() != nil {
 		s.logger.Error("SendEmail: context canceled", zap.Error(ctx.Err()))
 		return fmt.Errorf("SendEmail: context canceled")
-	default:
 	}
+
+	start := time.Now()
 
 	msg := gomail.NewMessage()
 
 	_, err := mail.ParseAddress(s.config.SenderEmail)
 	if err != nil {
+		s.metrics.Inc("SendEmail", monitoring.StatusError)
 		s.logger.Error("SendEmail: no valid sender address", zap.Error(err))
-
 		return fmt.Errorf("SendEmail: no valid sender address")
 	}
 
@@ -49,11 +51,17 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	s.logger.Info(fmt.Sprintf("SendEmail: sending email to %s", email.To))
 
 	if err = s.sendWithRetry(ctx, dialer, msg); err != nil {
+		s.metrics.Inc("SendEmail", monitoring.StatusError)
 		s.logger.Error(fmt.Sprintf("SendEmail: cannot send message to %s", email.To), zap.Error(err))
 		return fmt.Errorf("SendEmail: cannot send message to %s, %w", email.To, err)
 	}
 
 	s.logger.Info(fmt.Sprintf("SendEmail: successfully sent message to %s", email.To))
+
+	duration := time.Since(start).Seconds()
+	s.metrics.Observe("SendEmail", duration)
+	s.metrics.Inc("SendEmail", monitoring.StatusSuccess)
+
 	return nil
 }
 
@@ -61,11 +69,10 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 	var lastErr error
 
 	for i := 0; i < s.config.MaxRetries+1; i++ {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
+			s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
 			s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
 			return fmt.Errorf("sendWithRetry: context canceled")
-		default:
 		}
 
 		if i > 0 {
@@ -79,6 +86,7 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 			select {
 			case <-time.After(pause):
 			case <-ctx.Done():
+				s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
 				s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
 				return fmt.Errorf("sendWithRetry: context canceled")
 			}
@@ -91,6 +99,7 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 
 		return nil
 	}
+
 	s.logger.Error("sendWithRetry: all attempts to send message failed, last error:", zap.Error(lastErr))
 	return fmt.Errorf("sendWithRetry: all attempts to send message failed, last error: %w", lastErr)
 }

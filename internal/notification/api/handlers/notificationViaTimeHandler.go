@@ -67,6 +67,7 @@ func NewSendNotificationViaTimeHandler(l *zap.Logger, rc *redisClient.RedisClust
 
 		duration := time.Since(start).Seconds()
 		metrics.Observe(handlerNameForMetrics, duration)
+
 		metrics.Inc(handlerNameForMetrics, monitoring.StatusSuccess)
 	}
 }

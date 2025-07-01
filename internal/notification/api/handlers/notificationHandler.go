@@ -66,6 +66,7 @@ func NewSendNotificationHandler(l *zap.Logger, sender SMTPClient.EmailSender, me
 
 		duration := time.Since(start).Seconds()
 		metrics.Observe(handlerNameForMetrics, duration)
+
 		metrics.Inc(handlerNameForMetrics, monitoring.StatusSuccess)
 	}
 }

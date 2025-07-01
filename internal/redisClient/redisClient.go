@@ -96,6 +96,7 @@ func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.E
 	}
 
 	rc.metrics.Inc("ZAdd", monitoring.StatusSuccess)
+
 	return nil
 }
 
@@ -129,6 +130,8 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 		}
 	}
 
+	rc.metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
+
 	if len(res) != 0 {
 		start = time.Now()
 
@@ -145,7 +148,6 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	rc.metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
 	return res, nil
 }
 

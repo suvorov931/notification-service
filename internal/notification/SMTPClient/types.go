@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"go.uber.org/zap"
+
+	"notification/internal/monitoring"
 )
 
 type Config struct {
@@ -34,18 +36,20 @@ type EmailMessageWithTime struct {
 	Email EmailMessage
 }
 
-type SMTPClient struct {
-	config *Config
-	logger *zap.Logger
-}
-
 type EmailSender interface {
 	SendEmail(ctx context.Context, email EmailMessage) error
 }
 
-func New(config *Config, logger *zap.Logger) *SMTPClient {
+type SMTPClient struct {
+	config  *Config
+	metrics monitoring.Monitoring
+	logger  *zap.Logger
+}
+
+func New(config *Config, logger *zap.Logger, metrics monitoring.Monitoring) *SMTPClient {
 	return &SMTPClient{
-		config: config,
-		logger: logger,
+		config:  config,
+		metrics: metrics,
+		logger:  logger,
 	}
 }
