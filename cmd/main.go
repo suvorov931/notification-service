@@ -127,6 +127,7 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	return router
 }
 
+// TODO: покрыть интерфейсами
 // TODO: механизм отказоустойчивости (постоянное переподключение к редису и тд)
 // TODO: добавить хранилище отправленных сообщений через PostgreSQL
 // TODO: покрыть тестами ВСЁ, нагрузочные тесты?
@@ -137,6 +138,6 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 // TODO: попробовать на аккаунте лицея
 // TODO: GitHub Actions
 
-// TODO: мониторинг, kubernetes, nginx, kafka
+// TODO: kubernetes, nginx, kafka
 // TODO: многопоточность
 // TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?

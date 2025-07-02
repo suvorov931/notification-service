@@ -3,6 +3,7 @@ package SMTPClient
 import (
 	"context"
 
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
 	"notification/internal/monitoring"
@@ -52,4 +53,13 @@ func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMT
 		metrics: metrics,
 		logger:  logger,
 	}
+}
+
+type MockEmailSender struct {
+	mock.Mock
+}
+
+func (m *MockEmailSender) SendEmail(ctx context.Context, email EmailMessage) error {
+	args := m.Called(ctx, email)
+	return args.Error(0)
 }

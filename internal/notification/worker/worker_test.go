@@ -13,25 +13,8 @@ import (
 
 	"notification/internal/monitoring"
 	"notification/internal/notification/SMTPClient"
+	"notification/internal/redisClient"
 )
-
-type MockRedisClient struct {
-	mock.Mock
-}
-
-func (mrc *MockRedisClient) CheckRedis(ctx context.Context) ([]string, error) {
-	args := mrc.Called(ctx)
-	return args.Get(0).([]string), args.Error(1)
-}
-
-type MockEmailSender struct {
-	mock.Mock
-}
-
-func (m *MockEmailSender) SendEmail(ctx context.Context, email SMTPClient.EmailMessage) error {
-	args := m.Called(ctx, email)
-	return args.Error(0)
-}
 
 func TestWorker(t *testing.T) {
 	tests := []struct {
@@ -96,8 +79,8 @@ func TestWorker(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
 
-		mockRedis := &MockRedisClient{}
-		mockSender := &MockEmailSender{}
+		mockRedis := &redisClient.MockRedisClient{}
+		mockSender := &SMTPClient.MockEmailSender{}
 
 		mockRedis.On("CheckRedis", mock.Anything).Return(
 			[]string{
@@ -159,8 +142,8 @@ func TestWorker(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			mockRedis := &MockRedisClient{}
-			mockSender := &MockEmailSender{}
+			mockRedis := &redisClient.MockRedisClient{}
+			mockSender := &SMTPClient.MockEmailSender{}
 
 			mockRedis.On("CheckRedis", mock.Anything).
 				Return(tt.redisResponse, tt.redisError)
@@ -221,8 +204,8 @@ func TestWorker(t *testing.T) {
 func TestWorkerContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	mockRedis := &MockRedisClient{}
-	mockSender := &MockEmailSender{}
+	mockRedis := &redisClient.MockRedisClient{}
+	mockSender := &SMTPClient.MockEmailSender{}
 
 	mockRedis.On("CheckRedis", mock.Anything).Return([]string{}, nil)
 

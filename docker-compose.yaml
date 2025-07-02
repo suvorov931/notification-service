@@ -1,7 +1,5 @@
 # TODO: сделать поддержку переменных окружения
 
-#name: notification-SMTPClient
-
 networks:
   notification-service-net:
     driver: bridge
@@ -12,6 +10,7 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
+    image: notificationservice
     ports:
       - "8080:8080"
       - "2112:2112"

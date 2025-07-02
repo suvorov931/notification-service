@@ -16,25 +16,6 @@ import (
 	"notification/internal/notification/api"
 )
 
-const (
-	DefaultRedisTimeout = 3 * time.Second
-	emailTimeLayout     = "2006-01-02 15:04:05"
-)
-
-type Config struct {
-	Addrs    []string      `yaml:"REDIS_CLUSTER_ADDRS"`
-	Timeout  time.Duration `yaml:"REDIS_CLUSTER_TIMEOUT"`
-	Password string        `yaml:"REDIS_CLUSTER_PASSWORD"`
-	ReadOnly bool          `yaml:"REDIS_CLUSTER_READ_ONLY"`
-}
-
-type RedisCluster struct {
-	cluster *redis.ClusterClient
-	metrics monitoring.Monitoring
-	logger  *zap.Logger
-	timeout time.Duration
-}
-
 func New(ctx context.Context, cfg *Config, metrics monitoring.Monitoring, logger *zap.Logger) (*RedisCluster, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = DefaultRedisTimeout
