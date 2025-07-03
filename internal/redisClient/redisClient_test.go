@@ -19,9 +19,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"notification/internal/SMTPClient"
+	"notification/internal/api"
 	"notification/internal/monitoring"
-	"notification/internal/notification/SMTPClient"
-	"notification/internal/notification/api"
 )
 
 func TestAddDelayedEmail(t *testing.T) {

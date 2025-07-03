@@ -12,8 +12,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"notification/internal/notification/SMTPClient"
-	"notification/internal/notification/api"
+	"notification/internal/SMTPClient"
+	"notification/internal/api"
 )
 
 const emailTimeLayout = "2006-01-02 15:04:05"

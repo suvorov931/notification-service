@@ -5,9 +5,9 @@ import (
 
 	"github.com/ilyakaznacheev/cleanenv"
 
+	"notification/internal/SMTPClient"
+	"notification/internal/api"
 	"notification/internal/logger"
-	"notification/internal/notification/SMTPClient"
-	"notification/internal/notification/api"
 	"notification/internal/redisClient"
 )
 

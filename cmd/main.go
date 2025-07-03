@@ -16,13 +16,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
+	"notification/internal/SMTPClient"
+	handlers2 "notification/internal/api/handlers"
 	cconfig "notification/internal/config"
 	llogger "notification/internal/logger"
 	"notification/internal/monitoring"
-	"notification/internal/notification/SMTPClient"
-	"notification/internal/notification/api/handlers"
-	wworker "notification/internal/notification/worker"
 	rredisClient "notification/internal/redisClient"
+	wworker "notification/internal/worker"
 )
 
 const (
@@ -121,8 +121,8 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(logger, smtpClient, appMetrics.SendNotificationMetrics))
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(logger, redisClient, appMetrics.SendNotificationViaTimeMetrics))
+	router.Post("/send-notification", handlers2.NewSendNotificationHandler(logger, smtpClient, appMetrics.SendNotificationMetrics))
+	router.Post("/send-notification-via-time", handlers2.NewSendNotificationViaTimeHandler(logger, redisClient, appMetrics.SendNotificationViaTimeMetrics))
 
 	return router
 }

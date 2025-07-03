@@ -14,6 +14,14 @@ import (
 	"notification/internal/monitoring"
 )
 
+func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMTPClient {
+	return &SMTPClient{
+		config:  config,
+		metrics: metrics,
+		logger:  logger,
+	}
+}
+
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
 		s.logger.Error("SendEmail: context canceled", zap.Error(ctx.Err()))

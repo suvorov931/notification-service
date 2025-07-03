@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -12,33 +11,26 @@ import (
 
 func TestNew(t *testing.T) {
 	tempDir := t.TempDir()
-	tempFile := tempDir + "/config.yaml"
+	tempFile := tempDir + "/config.env"
 
 	content := `
-HTTP_SERVER:
-  HTTP_HOST: localhost
-  HTTP_PORT: 8080
-SMTP:
-  SENDER_EMAIL: something@mail.ru
-  SENDER_PASSWORD: somethingPassword
-  SMTP_HOST: hostForSMTP
-  SMTP_PORT: 12345
-  SKIP_VERIFY: false
-  MAX_RETRIES: 3
-  BASIC_RETRY_PAUSE: 5
-REDIS:
-  REDIS_CLUSTER_ADDRS:
-    - redis-node-1:7001
-    - redis-node-2:7002
-    - redis-node-3:7003
-    - redis-node-4:7004
-    - redis-node-5:7005
-    - redis-node-6:7006
-  REDIS_CLUSTER_TIMEOUT: 3s
-  REDIS_CLUSTER_PASSWORD: 12345
-  REDIS_CLUSTER_READ_ONLY: true
-LOGGER:
-  ENV: dev
+HTTP_HOST=localhost
+HTTP_PORT=8080
+
+SENDER_EMAIL=something@mail.ru
+SENDER_PASSWORD=somethingPassword
+SMTP_HOST=hostForSMTP
+SMTP_PORT=12345
+SKIP_VERIFY=false
+MAX_RETRIES=3
+BASIC_RETRY_PAUSE=5
+
+REDIS_CLUSTER_ADDRS=redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006
+REDIS_CLUSTER_TIMEOUT=3s
+REDIS_CLUSTER_PASSWORD=12345
+REDIS_CLUSTER_READ_ONLY=true
+
+LOGGER=dev
 `
 
 	err := os.WriteFile(tempFile, []byte(content), 0644)
@@ -57,8 +49,6 @@ LOGGER:
 	assert.Equal(t, false, cfg.SMTP.SkipVerify)
 	assert.Equal(t, 3, cfg.SMTP.MaxRetries)
 	assert.Equal(t, 5, cfg.SMTP.BasicRetryPause)
-
-	fmt.Println(cfg)
 
 	assert.Equal(t, []string{
 		"redis-node-1:7001",

@@ -47,14 +47,6 @@ type SMTPClient struct {
 	logger  *zap.Logger
 }
 
-func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMTPClient {
-	return &SMTPClient{
-		config:  config,
-		metrics: metrics,
-		logger:  logger,
-	}
-}
-
 type MockEmailSender struct {
 	mock.Mock
 }

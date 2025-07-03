@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
-	"notification/internal/notification/SMTPClient"
-	"notification/internal/notification/api"
+	"notification/internal/SMTPClient"
+	"notification/internal/api"
 )
 
 func TestDecoder(t *testing.T) {

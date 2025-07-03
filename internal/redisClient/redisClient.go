@@ -11,23 +11,23 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
+	"notification/internal/SMTPClient"
+	"notification/internal/api"
 	"notification/internal/monitoring"
-	"notification/internal/notification/SMTPClient"
-	"notification/internal/notification/api"
 )
 
-func New(ctx context.Context, cfg *Config, metrics monitoring.Monitoring, logger *zap.Logger) (*RedisCluster, error) {
-	if cfg.Timeout == 0 {
-		cfg.Timeout = DefaultRedisTimeout
+func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, logger *zap.Logger) (*RedisCluster, error) {
+	if config.Timeout == 0 {
+		config.Timeout = DefaultRedisTimeout
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	pingCtx, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
 
 	cluster := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:    cfg.Addrs,
-		Password: cfg.Password,
-		ReadOnly: cfg.ReadOnly,
+		Addrs:    config.Addrs,
+		Password: config.Password,
+		ReadOnly: config.ReadOnly,
 	})
 
 	if err := cluster.Ping(pingCtx).Err(); err != nil {
@@ -38,7 +38,7 @@ func New(ctx context.Context, cfg *Config, metrics monitoring.Monitoring, logger
 		cluster: cluster,
 		metrics: metrics,
 		logger:  logger,
-		timeout: cfg.Timeout,
+		timeout: config.Timeout,
 	}, nil
 }
 

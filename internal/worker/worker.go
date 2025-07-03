@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
-	"notification/internal/notification/SMTPClient"
 )
 
 type RedisChecker interface {
