@@ -38,7 +38,7 @@ type EmailMessageWithTime struct {
 }
 
 type EmailSender interface {
-	SendEmail(ctx context.Context, email EmailMessage) error
+	SendEmail(context.Context, EmailMessage) error
 }
 
 type SMTPClient struct {

@@ -71,7 +71,7 @@ func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.E
 
 		default:
 			rc.metrics.Inc("ZAdd", monitoring.StatusError)
-			rc.logger.Error("AddDelayedEmail: cannot get entry", zap.Error(err))
+			rc.logger.Error("AddDelayedEmail: cannot set entry", zap.Error(err))
 			return err
 		}
 	}

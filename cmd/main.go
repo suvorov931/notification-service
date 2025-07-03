@@ -57,11 +57,10 @@ func main() {
 
 	redisClient, err := rredisClient.New(ctx, &config.Redis, appMetrics.RedisMetrics, logger)
 	if err != nil {
-		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
+		//logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
-	metricsForSMTPClient := monitoring.New("smtp")
-	smtpClient := SMTPClient.New(&config.SMTP, metricsForSMTPClient, logger)
+	smtpClient := SMTPClient.New(&config.SMTP, appMetrics.SMTPMetrics, logger)
 
 	worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
 
@@ -72,20 +71,21 @@ func main() {
 		}
 	}()
 
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		monitoringAddr := fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.MonitoringPort)
+		logger.Info("metrics available at", zap.String("addr", monitoringAddr))
+		if err = http.ListenAndServe(monitoringAddr, nil); err != nil {
+			logger.Fatal("cannot start metrics server: %v", zap.Error(err))
+		}
+	}()
+
 	router := initRouter(logger, &config.Logger, smtpClient, redisClient, appMetrics)
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port),
 		Handler: router,
 	}
-
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		log.Println("metrics available at :2112/metrics")
-		if err := http.ListenAndServe(":2112", nil); err != nil {
-			log.Fatalf("cannot start metrics server: %v", err)
-		}
-	}()
 
 	go func() {
 		logger.Info("starting http server", zap.String("addr", srv.Addr))

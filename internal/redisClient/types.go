@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
+	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
 )
 
@@ -30,8 +31,18 @@ type RedisCluster struct {
 	timeout time.Duration
 }
 
+type RedisClient interface {
+	AddDelayedEmail(context.Context, *SMTPClient.EmailMessageWithTime) error
+	CheckRedis(context.Context) ([]string, error)
+}
+
 type MockRedisClient struct {
 	mock.Mock
+}
+
+func (mrc *MockRedisClient) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+	args := mrc.Called(ctx)
+	return args.Error(0)
 }
 
 func (mrc *MockRedisClient) CheckRedis(ctx context.Context) ([]string, error) {

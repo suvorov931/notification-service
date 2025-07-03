@@ -17,6 +17,7 @@ import (
 func NewSendNotificationHandler(logger *zap.Logger, sender SMTPClient.EmailSender, metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		start := time.Now()
 
 		handlerNameForMetrics := "SendNotification"
 
@@ -26,8 +27,6 @@ func NewSendNotificationHandler(logger *zap.Logger, sender SMTPClient.EmailSende
 			logger.Warn("NewSendNotificationHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
-
-		start := time.Now()
 
 		email, err := decoder.DecodeEmailRequest(api.KeyForInstantSending, w, r, logger)
 		if err != nil {

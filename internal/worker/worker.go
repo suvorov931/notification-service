@@ -11,21 +11,22 @@ import (
 
 	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
+	"notification/internal/redisClient"
 )
 
-type RedisChecker interface {
-	CheckRedis(ctx context.Context) ([]string, error)
-}
+//type RedisChecker interface {
+//	CheckRedis(ctx context.Context) ([]string, error)
+//}
 
 type Worker struct {
-	rc           RedisChecker
+	rc           redisClient.RedisClient
 	sender       SMTPClient.EmailSender
 	metrics      monitoring.Monitoring
 	logger       *zap.Logger
 	tickDuration time.Duration
 }
 
-func New(rc RedisChecker, sender SMTPClient.EmailSender, tickDuration time.Duration, metrics monitoring.Monitoring, logger *zap.Logger) *Worker {
+func New(rc redisClient.RedisClient, sender SMTPClient.EmailSender, tickDuration time.Duration, metrics monitoring.Monitoring, logger *zap.Logger) *Worker {
 	return &Worker{
 		rc:           rc,
 		sender:       sender,

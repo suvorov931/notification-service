@@ -15,19 +15,19 @@ import (
 	"notification/internal/redisClient"
 )
 
-func NewSendNotificationViaTimeHandler(logger *zap.Logger, rc *redisClient.RedisCluster, metrics monitoring.Monitoring) http.HandlerFunc {
+func NewSendNotificationViaTimeHandler(logger *zap.Logger, rc redisClient.RedisClient, metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		start := time.Now()
 
 		handlerNameForMetrics := "SendNotificationViaTime"
 
 		if ctx.Err() != nil {
+			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 			metrics.Inc(handlerNameForMetrics, monitoring.StatusCanceled)
 			logger.Warn("NewSendNotificationViaTimeHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
-
-		start := time.Now()
 
 		email, err := decoder.DecodeEmailRequest(api.KeyForDelayedSending, w, r, logger)
 		if err != nil {
@@ -36,32 +36,24 @@ func NewSendNotificationViaTimeHandler(logger *zap.Logger, rc *redisClient.Redis
 			return
 		}
 
-		_, err = w.Write([]byte("Message is correct\n\n"))
-		if err != nil {
-			logger.Warn("NewSendNotificationViaTimeHandler: Cannot send report to caller", zap.Error(err))
-		}
-
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
-		} else {
-			logger.Warn("NewSendNotificationViaTimeHandler: ResponseWriter does not support flushing")
-		}
-
 		err = rc.AddDelayedEmail(ctx, email.(*SMTPClient.EmailMessageWithTime))
 		if err != nil {
-			if errors.Is(ctx.Err(), context.Canceled) {
-				metrics.Inc(handlerNameForMetrics, monitoring.StatusCanceled)
-				logger.Warn("NewSendNotificationViaTimeHandler: Request canceled during sending", zap.Error(err))
-				return
+			var status string
+
+			if errors.Is(err, context.Canceled) {
+				status = monitoring.StatusCanceled
+				logger.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))
+			} else {
+				status = monitoring.StatusError
+				logger.Error("NewSendNotificationHandler: Cannot send notification", zap.Error(err))
 			}
 
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusError)
-			logger.Error("NewSendNotificationViaTimeHandler: Cannot add email", zap.Error(err))
+			metrics.Inc(handlerNameForMetrics, status)
 			return
 		}
 
-		if _, err = w.Write([]byte("Successfully saved your mail\n")); err != nil {
+		if _, err = w.Write([]byte("\nSuccessfully saved your mail\n")); err != nil {
 			logger.Warn("NewSendNotificationViaTimeHandler: Cannot send report to caller", zap.Error(err))
 		}
 
