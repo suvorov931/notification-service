@@ -12,7 +12,7 @@ import (
 )
 
 type Config struct {
-	Env    string `yaml:"ENV"`
+	Env    string `yaml:"ENV" env:"LOGGER"`
 	Output io.Writer
 }
 

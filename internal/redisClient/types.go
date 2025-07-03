@@ -17,10 +17,10 @@ const (
 )
 
 type Config struct {
-	Addrs    []string      `yaml:"REDIS_CLUSTER_ADDRS"`
-	Timeout  time.Duration `yaml:"REDIS_CLUSTER_TIMEOUT"`
-	Password string        `yaml:"REDIS_CLUSTER_PASSWORD"`
-	ReadOnly bool          `yaml:"REDIS_CLUSTER_READ_ONLY"`
+	Addrs    []string      `yaml:"REDIS_CLUSTER_ADDRS" env:"REDIS_CLUSTER_ADDRS"`
+	Timeout  time.Duration `yaml:"REDIS_CLUSTER_TIMEOUT" env:"REDIS_CLUSTER_TIMEOUT"`
+	Password string        `yaml:"REDIS_CLUSTER_PASSWORD" env:"REDIS_CLUSTER_PASSWORD"`
+	ReadOnly bool          `yaml:"REDIS_CLUSTER_READ_ONLY" env:"REDIS_CLUSTER_READ_ONLY"`
 }
 
 type RedisCluster struct {

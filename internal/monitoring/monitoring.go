@@ -2,14 +2,8 @@ package monitoring
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	_ "github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// import _ "github.com/prometheus/client_golang/prometheus/promauto"
-// import "github.com/prometheus/client_golang/prometheus/collectors"
-// алерты
-// prometheus.MustRegister(collectors.NewGoCollector())
-// prometheus.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 const (
 	StatusSuccess  = "success"
 	StatusError    = "error"

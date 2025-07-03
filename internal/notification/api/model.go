@@ -6,6 +6,6 @@ const (
 )
 
 type HttpServer struct {
-	Host string `yaml:"HTTP_HOST"`
-	Port string `yaml:"HTTP_PORT"`
+	Host string `yaml:"HTTP_HOST" env:"HTTP_HOST"`
+	Port string `yaml:"HTTP_PORT" env:"HTTP_PORT"`
 }

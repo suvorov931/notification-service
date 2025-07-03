@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	pathToConfigFile  = "./config/config.yaml"
+	pathToConfigFile  = "./config/config.env"
 	tickTimeForWorker = 1 * time.Second
 )
 

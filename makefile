@@ -11,6 +11,9 @@ init-redis-cluster:
 	redis-node-4:7004 redis-node-5:7005 redis-node-6:7006 \
 	--cluster-replicas 1 --cluster-yes
 
+include ./config/config.env
+export REDIS_CLUSTER_PASSWORD
+
 set-cluster-passwords:
 	bash scripts/set-cluster-passwords.sh
 

@@ -12,10 +12,10 @@ import (
 )
 
 type Config struct {
-	HttpServer api.HttpServer     `yaml:"HTTP_SERVER"`
-	SMTP       SMTPClient.Config  `yaml:"SMTP"`
-	Redis      redisClient.Config `yaml:"REDIS"`
-	Logger     logger.Config      `yaml:"LOGGER"`
+	HttpServer api.HttpServer
+	SMTP       SMTPClient.Config
+	Redis      redisClient.Config
+	Logger     logger.Config
 }
 
 func New(path string) (*Config, error) {
