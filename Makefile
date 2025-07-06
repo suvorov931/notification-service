@@ -1,5 +1,5 @@
 start-redis-nods:
-	docker-compose up -d redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5 redis-node-6
+	docker compose up -d redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5 redis-node-6
 
 init-redis-cluster:
 	#docker exec -it redis-node-1 redis-cli --cluster create \
@@ -17,13 +17,17 @@ export REDIS_CLUSTER_PASSWORD
 set-cluster-passwords:
 	bash scripts/set-cluster-passwords.sh
 
-down:
-	docker-compose down
+start-postgres:
+	docker compose up -d postgres
+
 
 start-monitoring:
-	docker-compose up -d grafana prometheus
+	docker compose up -d grafana prometheus
 
 start-app:
-	docker-compose up --build -d notification-service
+	docker compose up --build -d notification-service
+
+down:
+	docker compose down
 
 all: start-redis-nods init-redis-cluster set-cluster-passwords start-monitoring start-app

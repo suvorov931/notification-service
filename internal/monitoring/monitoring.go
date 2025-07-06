@@ -23,6 +23,7 @@ type Metrics struct {
 
 type AppMetrics struct {
 	RedisMetrics                   *Metrics
+	PostgresMetrics                *Metrics
 	WorkerMetrics                  *Metrics
 	SMTPMetrics                    *Metrics
 	SendNotificationMetrics        *Metrics
@@ -32,6 +33,7 @@ type AppMetrics struct {
 func NewAppMetrics() *AppMetrics {
 	return &AppMetrics{
 		RedisMetrics:                   New("Redis"),
+		PostgresMetrics:                New("Postgres"),
 		WorkerMetrics:                  New("Worker"),
 		SMTPMetrics:                    New("SMTP"),
 		SendNotificationMetrics:        New("SendNotification"),

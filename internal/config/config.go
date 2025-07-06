@@ -8,13 +8,15 @@ import (
 	"notification/internal/SMTPClient"
 	"notification/internal/api"
 	"notification/internal/logger"
-	"notification/internal/redisClient"
+	"notification/internal/storage/postgresClient"
+	"notification/internal/storage/redisClient"
 )
 
 type Config struct {
 	HttpServer api.HttpServer
 	SMTP       SMTPClient.Config
 	Redis      redisClient.Config
+	Postgres   postgresClient.Config
 	Logger     logger.Config
 }
 

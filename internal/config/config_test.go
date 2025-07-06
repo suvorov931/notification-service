@@ -27,8 +27,14 @@ BASIC_RETRY_PAUSE=5
 
 REDIS_CLUSTER_ADDRS=redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006
 REDIS_CLUSTER_TIMEOUT=3s
-REDIS_CLUSTER_PASSWORD=12345
+REDIS_CLUSTER_PASSWORD=redisPassword
 REDIS_CLUSTER_READ_ONLY=true
+
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=root
+POSTGRES_PASSWORD=postgresPassword
+POSTGRES_DATABASE=postgres
 
 LOGGER=dev
 `
@@ -59,8 +65,14 @@ LOGGER=dev
 		"redis-node-6:7006",
 	}, cfg.Redis.Addrs)
 	assert.Equal(t, 3*time.Second, cfg.Redis.Timeout)
-	assert.Equal(t, "12345", cfg.Redis.Password)
+	assert.Equal(t, "redisPassword", cfg.Redis.Password)
 	assert.Equal(t, true, cfg.Redis.ReadOnly)
+
+	assert.Equal(t, "localhost", cfg.Postgres.Host)
+	assert.Equal(t, "5432", cfg.Postgres.Port)
+	assert.Equal(t, "root", cfg.Postgres.User)
+	assert.Equal(t, "postgresPassword", cfg.Postgres.Password)
+	assert.Equal(t, "postgres", cfg.Postgres.Database)
 
 	assert.Equal(t, "dev", cfg.Logger.Env)
 

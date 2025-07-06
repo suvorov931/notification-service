@@ -11,12 +11,8 @@ import (
 
 	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
-	"notification/internal/redisClient"
+	"notification/internal/storage/redisClient"
 )
-
-//type RedisChecker interface {
-//	CheckRedis(ctx context.Context) ([]string, error)
-//}
 
 type Worker struct {
 	rc           redisClient.RedisClient

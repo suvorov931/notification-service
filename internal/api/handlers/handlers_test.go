@@ -14,7 +14,7 @@ import (
 
 	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
-	"notification/internal/redisClient"
+	"notification/internal/storage/redisClient"
 )
 
 func TestNewSendNotificationHandler(t *testing.T) {

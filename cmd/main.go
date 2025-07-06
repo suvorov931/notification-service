@@ -21,7 +21,7 @@ import (
 	cconfig "notification/internal/config"
 	llogger "notification/internal/logger"
 	"notification/internal/monitoring"
-	rredisClient "notification/internal/redisClient"
+	rredisClient "notification/internal/storage/redisClient"
 	wworker "notification/internal/worker"
 )
 
@@ -57,7 +57,7 @@ func main() {
 
 	redisClient, err := rredisClient.New(ctx, &config.Redis, appMetrics.RedisMetrics, logger)
 	if err != nil {
-		//logger.Fatal("cannot initialize redisClient client", zap.Error(err))
+		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
 	smtpClient := SMTPClient.New(&config.SMTP, appMetrics.SMTPMetrics, logger)

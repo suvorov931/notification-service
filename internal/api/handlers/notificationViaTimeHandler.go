@@ -12,7 +12,7 @@ import (
 	"notification/internal/api"
 	"notification/internal/api/decoder"
 	"notification/internal/monitoring"
-	"notification/internal/redisClient"
+	"notification/internal/storage/redisClient"
 )
 
 func NewSendNotificationViaTimeHandler(logger *zap.Logger, rc redisClient.RedisClient, metrics monitoring.Monitoring) http.HandlerFunc {

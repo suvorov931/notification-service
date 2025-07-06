@@ -13,7 +13,7 @@ import (
 
 	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
-	"notification/internal/redisClient"
+	"notification/internal/storage/redisClient"
 )
 
 func TestWorker(t *testing.T) {
