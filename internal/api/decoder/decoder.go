@@ -19,16 +19,16 @@ import (
 const emailTimeLayout = "2006-01-02 15:04:05"
 
 var (
-	ErrNotAllFields            = errors.New("DecodeMailRequest: checkFields: request body not all required fields are filled")
-	ErrNoValidRecipientAddress = errors.New("DecodeMailRequest: checkFields: no valid recipient address found")
-	ErrHeaderNotJSON           = errors.New("DecodeMailRequest: checkHeaders: header is not a application/json")
-	ErrSyntaxError             = errors.New("DecodeMailRequest: errDuringParse: request body contains badly-formed JSON")
-	ErrInvalidType             = errors.New("DecodeMailRequest: errDuringParse: request body contains an invalid value type")
-	ErrEmptyBody               = errors.New("DecodeMailRequest: decodeBody: request body must not be empty")
-	ErrTimeNotAtFuture         = errors.New("DecodeMailRequest: checkTime: time not at future")
-	ErrNoValidTimeFiled        = errors.New("DecodeMailRequest: checkTime: no valid time field")
-	ErrUnknownKey              = errors.New("DecodeMailRequest: determineType: unknown key")
-	ErrUnknownError            = errors.New("DecodeMailRequest: Unknown error")
+	ErrNotAllFields            = errors.New("checkFields: request body not all required fields are filled")
+	ErrNoValidRecipientAddress = errors.New("checkFields: no valid recipient address found")
+	ErrHeaderNotJSON           = errors.New("checkHeaders: header is not a application/json")
+	ErrSyntaxError             = errors.New("errDuringParse: request body contains badly-formed JSON")
+	ErrInvalidType             = errors.New("errDuringParse: request body contains an invalid value type")
+	ErrEmptyBody               = errors.New("decodeBody: request body must not be empty")
+	ErrTimeNotAtFuture         = errors.New("checkTime: time not at future")
+	ErrNoValidTimeFiled        = errors.New("checkTime: no valid time field")
+	ErrUnknownKey              = errors.New("determineType: unknown key")
+	ErrUnknownError            = errors.New("unknown error")
 )
 
 // TODO: попробовать переделать через дженерик

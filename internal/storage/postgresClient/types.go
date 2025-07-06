@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
-	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
 )
 
@@ -28,12 +28,17 @@ type Config struct {
 // сделать поля неэкспортируемыми
 
 type PostgresService struct {
-	Pool    *pgxpool.Pool
-	Metrics monitoring.Monitoring
-	Logger  *zap.Logger
+	pool    *pgxpool.Pool
+	metrics monitoring.Monitoring
+	logger  *zap.Logger
 }
 
 type PostgresClient interface {
-	AddInstantSending(context.Context, *SMTPClient.EmailMessage) error
-	AddDelayedSending(context.Context, *SMTPClient.EmailMessageWithTime) error
+	AddSending(context.Context, string, any) error
 }
+
+type MockForPostgresService struct {
+	mock.Mock
+}
+
+func (mps)

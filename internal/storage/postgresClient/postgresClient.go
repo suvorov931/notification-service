@@ -11,10 +11,12 @@ import (
 	_ "github.com/golang-migrate/migrate/source/file"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
+	"notification/internal/api"
 	"notification/internal/monitoring"
 )
 
@@ -33,57 +35,50 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}
 
 	return &PostgresService{
-		Pool:    pool,
-		Metrics: metrics,
-		Logger:  logger,
+		pool:    pool,
+		metrics: metrics,
+		logger:  logger,
 	}, nil
 }
 
-func (pr *PostgresService) AddInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) error {
+func (pr *PostgresService) AddSending(ctx context.Context, key string, email any) error {
+	if ctx.Err() != nil {
+		pr.metrics.Inc("AddSending", monitoring.StatusCanceled)
+		pr.logger.Warn("AddSending: context canceled before adding email ti postgres", zap.Error(ctx.Err()))
+		return fmt.Errorf("AddSending: context canceled before adding email ti postgres")
+	}
+
 	start := time.Now()
 
-	tag, err := pr.Pool.Exec(ctx, queryForAddInstantSending, email.To, email.Subject, email.Message)
+	var err error
+	var tag pgconn.CommandTag
+
+	switch key {
+	case api.KeyForInstantSending:
+		e := email.(*SMTPClient.EmailMessage)
+		tag, err = pr.pool.Exec(ctx, queryForAddInstantSending, e.To, e.Subject, e.Message)
+	case api.KeyForDelayedSending:
+		e := email.(*SMTPClient.EmailMessageWithTime)
+		tag, err = pr.pool.Exec(ctx, queryForAddDelayedSending, e.Time, e.Email.To, e.Email.Subject, e.Email.Message)
+	}
+
 	if err != nil {
-		pr.Metrics.Inc("AddInstantSending", monitoring.StatusError)
-		pr.Logger.Error("AddInstantSending: failed to add email to database", zap.Error(err))
-		return fmt.Errorf("AddInstantSending: failed to add email to database: %w", err)
+		pr.metrics.Inc("AddSending", monitoring.StatusError)
+		pr.logger.Error("AddSending: failed to add email to database", zap.Error(err))
+		return fmt.Errorf("AddSending: failed to add email to database: %w", err)
 	}
 
 	duration := time.Since(start).Seconds()
-	pr.Metrics.Observe("AddInstantSending", duration)
+	pr.metrics.Observe("AddSending", duration)
 
 	if tag.RowsAffected() != 1 {
-		pr.Metrics.Inc("AddInstantSending", monitoring.StatusError)
-		pr.Logger.Error("AddInstantSending: no rows affected", zap.Error(err))
-		return fmt.Errorf("AddInstantSending: no rows affected: %w", err)
+		pr.metrics.Inc("AddSending", monitoring.StatusError)
+		pr.logger.Error("AddSending: no rows affected", zap.Error(err))
+		return fmt.Errorf("AddSending: no rows affected: %w", err)
 	}
 
-	pr.Metrics.Inc("AddInstantSending", monitoring.StatusSuccess)
-	pr.Logger.Info("AddInstantSending: successfully add email to database", zap.Any("email", email))
-	return nil
-}
-
-func (pr *PostgresService) AddDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
-	start := time.Now()
-
-	tag, err := pr.Pool.Exec(ctx, queryForAddDelayedSending, email.Time, email.Email.To, email.Email.Subject, email.Email.Message)
-	if err != nil {
-		pr.Metrics.Inc("AddDelayedSending", monitoring.StatusError)
-		pr.Logger.Error("AddDelayedSending: failed to add email to database", zap.Error(err))
-		return fmt.Errorf("AddDelayedSending: failed to add email to database: %w", err)
-	}
-
-	duration := time.Since(start).Seconds()
-	pr.Metrics.Observe("AddDelayedSending", duration)
-
-	if tag.RowsAffected() != 1 {
-		pr.Metrics.Inc("AddDelayedSending", monitoring.StatusError)
-		pr.Logger.Error("AddDelayedSending: no rows affected", zap.Error(err))
-		return fmt.Errorf("AddDelayedSending: no rows affected: %w", err)
-	}
-
-	pr.Metrics.Inc("AddDelayedSending", monitoring.StatusSuccess)
-	pr.Logger.Info("AddDelayedSending: successfully add email to database", zap.Any("email", email))
+	pr.metrics.Inc("AddSending", monitoring.StatusSuccess)
+	pr.logger.Info("AddSending: successfully add email to database", zap.Any("email", email))
 	return nil
 }
 

@@ -57,7 +57,7 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 			logger.Warn("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
 		}
 
-		err = pc.AddInstantSending(ctx, email.(*SMTPClient.EmailMessage))
+		err = pc.AddSending(ctx, api.KeyForInstantSending, email.(*SMTPClient.EmailMessage))
 		if err != nil {
 			metrics.Inc(handlerNameForMetrics, monitoring.StatusError)
 			logger.Warn("NewSendNotificationHandler: Cannot put email in postgres")

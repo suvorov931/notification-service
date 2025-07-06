@@ -24,8 +24,8 @@ func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMT
 
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
-		s.logger.Error("SendEmail: context canceled", zap.Error(ctx.Err()))
-		return fmt.Errorf("SendEmail: context canceled")
+		s.logger.Error("SendEmail: context canceled before sending", zap.Error(ctx.Err()))
+		return fmt.Errorf("SendEmail: context canceled before sending")
 	}
 
 	start := time.Now()
@@ -79,8 +79,8 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 	for i := 0; i < s.config.MaxRetries+1; i++ {
 		if ctx.Err() != nil {
 			s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
-			s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
-			return fmt.Errorf("sendWithRetry: context canceled")
+			s.logger.Error("sendWithRetry: context canceled before retry", zap.Error(ctx.Err()))
+			return fmt.Errorf("sendWithRetry: context canceled before retry")
 		}
 
 		if i > 0 {
