@@ -18,10 +18,7 @@ import (
 	"notification/internal/monitoring"
 )
 
-// TODO: переехать на testify
 // TODO: новые тестовые кейсы
-// TODO: обработка всех ошибок
-// TODO: добавить кастомных внятных ошибок и проверить их
 // TODO: тесты для sendWithRetry
 
 func TestSendEmail(t *testing.T) {

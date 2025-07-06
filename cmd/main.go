@@ -17,10 +17,11 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
-	handlers2 "notification/internal/api/handlers"
+	"notification/internal/api/handlers"
 	cconfig "notification/internal/config"
 	llogger "notification/internal/logger"
 	"notification/internal/monitoring"
+	ppostgresClient "notification/internal/storage/postgresClient"
 	rredisClient "notification/internal/storage/redisClient"
 	wworker "notification/internal/worker"
 )
@@ -60,6 +61,11 @@ func main() {
 		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
+	postgresClient, err := ppostgresClient.New(ctx, &config.Postgres, appMetrics.PostgresMetrics, logger)
+	if err != nil {
+		log.Fatalf("cannot initialize postgres client: %v", err)
+	}
+
 	smtpClient := SMTPClient.New(&config.SMTP, appMetrics.SMTPMetrics, logger)
 
 	worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
@@ -80,7 +86,7 @@ func main() {
 		}
 	}()
 
-	router := initRouter(logger, &config.Logger, smtpClient, redisClient, appMetrics)
+	router := initRouter(logger, &config.Logger, smtpClient, redisClient, postgresClient, appMetrics)
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port),
@@ -112,7 +118,7 @@ func main() {
 }
 
 func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient,
-	redisClient *rredisClient.RedisCluster, appMetrics *monitoring.AppMetrics) *chi.Mux {
+	redisClient *rredisClient.RedisCluster, postgresClient ppostgresClient.PostgresClient, appMetrics *monitoring.AppMetrics) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -121,22 +127,14 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/send-notification", handlers2.NewSendNotificationHandler(logger, smtpClient, appMetrics.SendNotificationMetrics))
-	router.Post("/send-notification-via-time", handlers2.NewSendNotificationViaTimeHandler(logger, redisClient, appMetrics.SendNotificationViaTimeMetrics))
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(smtpClient, postgresClient, logger, appMetrics.SendNotificationMetrics))
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(redisClient, logger, appMetrics.SendNotificationViaTimeMetrics))
 
 	return router
 }
 
-// TODO: покрыть интерфейсами
 // TODO: механизм отказоустойчивости (постоянное переподключение к редису и тд)
-// TODO: добавить хранилище отправленных сообщений через PostgreSQL
-// TODO: покрыть тестами ВСЁ, нагрузочные тесты?
 // TODO: дополнить README, написать документацию
-// TODO: добавить в stage сборку прогон тестов
-
-// TODO: GitLab CI/CD
-// TODO: попробовать на аккаунте лицея
-// TODO: GitHub Actions
 
 // TODO: kubernetes, nginx, kafka
 // TODO: многопоточность

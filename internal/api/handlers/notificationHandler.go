@@ -12,9 +12,10 @@ import (
 	"notification/internal/api"
 	"notification/internal/api/decoder"
 	"notification/internal/monitoring"
+	"notification/internal/storage/postgresClient"
 )
 
-func NewSendNotificationHandler(logger *zap.Logger, sender SMTPClient.EmailSender, metrics monitoring.Monitoring) http.HandlerFunc {
+func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient.PostgresClient, logger *zap.Logger, metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		start := time.Now()
@@ -54,6 +55,12 @@ func NewSendNotificationHandler(logger *zap.Logger, sender SMTPClient.EmailSende
 
 		if _, err = w.Write([]byte("\nSuccessfully sent notification\n")); err != nil {
 			logger.Warn("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
+		}
+
+		err = pc.AddInstantSending(ctx, email.(*SMTPClient.EmailMessage))
+		if err != nil {
+			metrics.Inc(handlerNameForMetrics, monitoring.StatusError)
+			logger.Warn("NewSendNotificationHandler: Cannot put email in postgres")
 		}
 
 		duration := time.Since(start).Seconds()

@@ -59,6 +59,7 @@ func (pr *PostgresService) AddInstantSending(ctx context.Context, email *SMTPCli
 	}
 
 	pr.Metrics.Inc("AddInstantSending", monitoring.StatusSuccess)
+	pr.Logger.Info("AddInstantSending: successfully add email to database", zap.Any("email", email))
 	return nil
 }
 
@@ -82,6 +83,7 @@ func (pr *PostgresService) AddDelayedSending(ctx context.Context, email *SMTPCli
 	}
 
 	pr.Metrics.Inc("AddDelayedSending", monitoring.StatusSuccess)
+	pr.Logger.Info("AddDelayedSending: successfully add email to database", zap.Any("email", email))
 	return nil
 }
 
