@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -12,8 +14,11 @@ const (
 )
 
 type Monitoring interface {
-	Inc(operation string, status string)
-	Observe(operation string, duration float64)
+	IncSuccess(operation string)
+	IncError(operation string)
+	IncCanceled(operation string)
+	IncTimeout(operation string)
+	Observe(operation string, start time.Time)
 }
 
 type Metrics struct {
@@ -26,22 +31,24 @@ type AppMetrics struct {
 	PostgresMetrics                *Metrics
 	WorkerMetrics                  *Metrics
 	SMTPMetrics                    *Metrics
+	ListNotificationMetrics        *Metrics
 	SendNotificationMetrics        *Metrics
 	SendNotificationViaTimeMetrics *Metrics
 }
 
 func NewAppMetrics() *AppMetrics {
 	return &AppMetrics{
-		RedisMetrics:                   New("Redis"),
-		PostgresMetrics:                New("Postgres"),
-		WorkerMetrics:                  New("Worker"),
-		SMTPMetrics:                    New("SMTP"),
-		SendNotificationMetrics:        New("SendNotification"),
-		SendNotificationViaTimeMetrics: New("SendNotificationViaTime"),
+		RedisMetrics:                   new("Redis"),
+		PostgresMetrics:                new("Postgres"),
+		WorkerMetrics:                  new("Worker"),
+		SMTPMetrics:                    new("SMTP"),
+		ListNotificationMetrics:        new("ListNotification"),
+		SendNotificationMetrics:        new("SendNotification"),
+		SendNotificationViaTimeMetrics: new("SendNotificationViaTime"),
 	}
 }
 
-func New(name string) *Metrics {
+func new(name string) *Metrics {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: name + "_operations_total",
 		Help: "Total count of " + name + " operations",
@@ -63,11 +70,24 @@ func New(name string) *Metrics {
 	}
 }
 
-func (m *Metrics) Inc(operation string, status string) {
-	m.Counter.WithLabelValues(operation, status).Inc()
+func (m *Metrics) IncSuccess(operation string) {
+	m.Counter.WithLabelValues(operation, StatusSuccess).Inc()
 }
 
-func (m *Metrics) Observe(operation string, duration float64) {
+func (m *Metrics) IncError(operation string) {
+	m.Counter.WithLabelValues(operation, StatusError).Inc()
+}
+
+func (m *Metrics) IncCanceled(operation string) {
+	m.Counter.WithLabelValues(operation, StatusCanceled).Inc()
+}
+
+func (m *Metrics) IncTimeout(operation string) {
+	m.Counter.WithLabelValues(operation, StatusTimeout).Inc()
+}
+
+func (m *Metrics) Observe(operation string, start time.Time) {
+	duration := time.Since(start).Seconds()
 	m.Duration.WithLabelValues(operation).Observe(duration)
 }
 
@@ -77,5 +97,8 @@ func NewNop() *NopMetrics {
 	return &NopMetrics{}
 }
 
-func (nm *NopMetrics) Inc(operation string, status string)        {}
-func (nm *NopMetrics) Observe(operation string, duration float64) {}
+func (nm *NopMetrics) IncSuccess(operation string)               {}
+func (nm *NopMetrics) IncError(operation string)                 {}
+func (nm *NopMetrics) IncCanceled(operation string)              {}
+func (nm *NopMetrics) IncTimeout(operation string)               {}
+func (nm *NopMetrics) Observe(operation string, start time.Time) {}

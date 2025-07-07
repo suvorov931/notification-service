@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
+	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
 )
 
@@ -25,8 +26,6 @@ type Config struct {
 	MinConns int    `env:"POSTGRES_MIN_CONNECTIONS"`
 }
 
-// сделать поля неэкспортируемыми
-
 type PostgresService struct {
 	pool    *pgxpool.Pool
 	metrics monitoring.Monitoring
@@ -34,11 +33,19 @@ type PostgresService struct {
 }
 
 type PostgresClient interface {
-	AddSending(context.Context, string, any) error
+	AddInstantSending(context.Context, *SMTPClient.EmailMessage) error
+	AddDelayedSending(context.Context, *SMTPClient.EmailMessageWithTime) error
 }
 
 type MockForPostgresService struct {
 	mock.Mock
 }
 
-func (mps)
+func (mps *MockForPostgresService) AddInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) error {
+	args := mps.Called(ctx, email)
+	return args.Error(0)
+}
+func (mps *MockForPostgresService) AddDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+	args := mps.Called(ctx, email)
+	return args.Error(0)
+}

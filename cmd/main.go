@@ -118,7 +118,7 @@ func main() {
 }
 
 func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient,
-	redisClient *rredisClient.RedisCluster, postgresClient *ppostgresClient.PostgresClient, appMetrics *monitoring.AppMetrics) *chi.Mux {
+	redisClient *rredisClient.RedisCluster, postgresClient *ppostgresClient.PostgresService, appMetrics *monitoring.AppMetrics) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -127,8 +127,9 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(smtpClient, *postgresClient, logger, appMetrics.SendNotificationMetrics))
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(smtpClient, postgresClient, logger, appMetrics.SendNotificationMetrics))
 	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(redisClient, logger, appMetrics.SendNotificationViaTimeMetrics))
+	router.Get("/list", handlers.NewNotificationListHandler(postgresClient, logger, appMetrics.ListNotificationMetrics))
 
 	return router
 }

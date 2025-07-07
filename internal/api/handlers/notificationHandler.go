@@ -24,32 +24,29 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 
 		if ctx.Err() != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusCanceled)
+			metrics.IncCanceled(handlerNameForMetrics)
 			logger.Warn("NewSendNotificationHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
 
 		email, err := decoder.DecodeEmailRequest(api.KeyForInstantSending, w, r, logger)
 		if err != nil {
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusError)
+			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationHandler: Failed to decode request", zap.Error(err))
 			return
 		}
 
 		err = sender.SendEmail(ctx, *email.(*SMTPClient.EmailMessage))
 		if err != nil {
-			var status string
-
 			if errors.Is(err, context.Canceled) {
-				status = monitoring.StatusCanceled
+				metrics.IncCanceled("SendNotification")
 				logger.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))
 			} else {
-				status = monitoring.StatusError
+				metrics.IncError(handlerNameForMetrics)
 				logger.Error("NewSendNotificationHandler: Cannot send notification", zap.Error(err))
 			}
 
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.Inc(handlerNameForMetrics, status)
 			return
 		}
 
@@ -57,15 +54,14 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 			logger.Warn("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
 		}
 
-		err = pc.AddSending(ctx, api.KeyForInstantSending, email.(*SMTPClient.EmailMessage))
+		err = pc.AddInstantSending(ctx, email.(*SMTPClient.EmailMessage))
 		if err != nil {
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusError)
+			metrics.IncError(handlerNameForMetrics)
 			logger.Warn("NewSendNotificationHandler: Cannot put email in postgres")
 		}
 
-		duration := time.Since(start).Seconds()
-		metrics.Observe(handlerNameForMetrics, duration)
+		metrics.Observe(handlerNameForMetrics, start)
 
-		metrics.Inc(handlerNameForMetrics, monitoring.StatusSuccess)
+		metrics.IncSuccess(handlerNameForMetrics)
 	}
 }

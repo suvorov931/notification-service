@@ -24,32 +24,29 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, logger *zap.L
 
 		if ctx.Err() != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusCanceled)
+			metrics.IncCanceled(handlerNameForMetrics)
 			logger.Warn("NewSendNotificationViaTimeHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
 
 		email, err := decoder.DecodeEmailRequest(api.KeyForDelayedSending, w, r, logger)
 		if err != nil {
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusError)
+			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationViaTimeHandler: Failed to decode request", zap.Error(err))
 			return
 		}
 
 		err = rc.AddDelayedEmail(ctx, email.(*SMTPClient.EmailMessageWithTime))
 		if err != nil {
-			var status string
-
 			if errors.Is(err, context.Canceled) {
-				status = monitoring.StatusCanceled
+				metrics.IncCanceled(handlerNameForMetrics)
 				logger.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))
 			} else {
-				status = monitoring.StatusError
+				metrics.IncError(handlerNameForMetrics)
 				logger.Error("NewSendNotificationHandler: Cannot send notification", zap.Error(err))
 			}
 
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.Inc(handlerNameForMetrics, status)
 			return
 		}
 
@@ -57,9 +54,8 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, logger *zap.L
 			logger.Warn("NewSendNotificationViaTimeHandler: Cannot send report to caller", zap.Error(err))
 		}
 
-		duration := time.Since(start).Seconds()
-		metrics.Observe(handlerNameForMetrics, duration)
+		metrics.Observe(handlerNameForMetrics, start)
 
-		metrics.Inc(handlerNameForMetrics, monitoring.StatusSuccess)
+		metrics.IncSuccess(handlerNameForMetrics)
 	}
 }

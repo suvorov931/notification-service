@@ -34,7 +34,7 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 
 	_, err := mail.ParseAddress(s.config.SenderEmail)
 	if err != nil {
-		s.metrics.Inc("SendEmail", monitoring.StatusError)
+		s.metrics.IncError("SendEmail")
 		s.logger.Error("SendEmail: no valid sender address", zap.Error(err))
 		return fmt.Errorf("SendEmail: no valid sender address")
 	}
@@ -59,16 +59,15 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	s.logger.Info(fmt.Sprintf("SendEmail: sending email to %s", email.To))
 
 	if err = s.sendWithRetry(ctx, dialer, msg); err != nil {
-		s.metrics.Inc("SendEmail", monitoring.StatusError)
+		s.metrics.IncError("SendEmail")
 		s.logger.Error(fmt.Sprintf("SendEmail: cannot send message to %s", email.To), zap.Error(err))
 		return fmt.Errorf("SendEmail: cannot send message to %s, %w", email.To, err)
 	}
 
 	s.logger.Info(fmt.Sprintf("SendEmail: successfully sent message to %s", email.To))
 
-	duration := time.Since(start).Seconds()
-	s.metrics.Observe("SendEmail", duration)
-	s.metrics.Inc("SendEmail", monitoring.StatusSuccess)
+	s.metrics.Observe("SendEmail", start)
+	s.metrics.IncSuccess("SendEmail")
 
 	return nil
 }
@@ -78,7 +77,7 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 
 	for i := 0; i < s.config.MaxRetries+1; i++ {
 		if ctx.Err() != nil {
-			s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
+			s.metrics.IncCanceled("SendEmail")
 			s.logger.Error("sendWithRetry: context canceled before retry", zap.Error(ctx.Err()))
 			return fmt.Errorf("sendWithRetry: context canceled before retry")
 		}
@@ -94,7 +93,7 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 			select {
 			case <-time.After(pause):
 			case <-ctx.Done():
-				s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
+				s.metrics.IncCanceled("SendEmail")
 				s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
 				return fmt.Errorf("sendWithRetry: context canceled")
 			}

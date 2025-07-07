@@ -59,25 +59,26 @@ func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.E
 		Member: emailJSON,
 	}).Err()
 
-	duration := time.Since(start).Seconds()
-	rc.metrics.Observe("ZAdd", duration)
+	rc.metrics.Observe("ZAdd", start)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			rc.metrics.Inc("ZAdd", monitoring.StatusTimeout)
+			rc.metrics.IncTimeout("ZAdd")
 			rc.logger.Error("AddDelayedEmail: deadline exceeded", zap.Error(err))
 			return fmt.Errorf("AddDelayedEmail: %w", context.DeadlineExceeded)
 
 		default:
-			rc.metrics.Inc("ZAdd", monitoring.StatusError)
+			rc.metrics.IncError("ZAdd")
 			rc.logger.Error("AddDelayedEmail: cannot set entry", zap.Error(err))
 			return err
 		}
 	}
 
-	rc.metrics.Inc("ZAdd", monitoring.StatusSuccess)
+	rc.metrics.IncSuccess("ZAdd")
 
+	rc.metrics.Observe("AddDelayedEmail", start)
+	rc.metrics.IncSuccess("AddDelayedEmail")
 	return nil
 }
 
@@ -94,41 +95,41 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 		Max: strconv.FormatFloat(now, 'f', -1, 64),
 	}).Result()
 
-	duration := time.Since(start).Seconds()
-	rc.metrics.Observe("ZRangeByScore", duration)
+	rc.metrics.Observe("ZRangeByScore", start)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			rc.metrics.Inc("ZRangeByScore", monitoring.StatusTimeout)
+			rc.metrics.IncTimeout("ZRangeByScore")
 			rc.logger.Error("CheckRedis: deadline exceeded", zap.Error(err))
 			return nil, fmt.Errorf("CheckRedis: %w", context.DeadlineExceeded)
 
 		default:
-			rc.metrics.Inc("ZRangeByScore", monitoring.StatusError)
+			rc.metrics.IncError("ZRangeByScore")
 			rc.logger.Error("CheckRedis: cannot get entry", zap.Error(err))
 			return nil, err
 		}
 	}
 
-	rc.metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
+	rc.metrics.IncSuccess("ZRangeByScore")
 
 	if len(res) != 0 {
-		start = time.Now()
+		startZRem := time.Now()
 
 		err = rc.cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
 
-		duration = time.Since(start).Seconds()
-		rc.metrics.Observe("ZRem", duration)
+		rc.metrics.Observe("ZRem", startZRem)
 
 		if err != nil {
-			rc.metrics.Inc("ZRem", monitoring.StatusError)
+			rc.metrics.IncError("ZRem")
 			rc.logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
 		} else {
-			rc.metrics.Inc("ZRem", monitoring.StatusSuccess)
+			rc.metrics.IncSuccess("ZRem")
 		}
 	}
 
+	rc.metrics.Observe("CheckRedis", start)
+	rc.metrics.IncSuccess("CheckRedis")
 	return res, nil
 }
 

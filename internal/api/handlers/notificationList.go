@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -18,9 +19,11 @@ func NewNotificationListHandler(pc postgresClient.PostgresClient, logger *zap.Lo
 
 		if ctx.Err() != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.Inc(handlerNameForMetrics, monitoring.StatusCanceled)
+			metrics.IncCanceled(handlerNameForMetrics)
 			logger.Warn("NewSendNotificationHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
+
+		fmt.Println(r.Body)
 	}
 }
