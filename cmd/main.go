@@ -28,6 +28,7 @@ import (
 
 const (
 	pathToConfigFile  = "./config/config.env"
+	pathToMigrations  = "file://./database/migrations"
 	tickTimeForWorker = 1 * time.Second
 )
 
@@ -61,7 +62,7 @@ func main() {
 		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
-	postgresClient, err := ppostgresClient.New(ctx, &config.Postgres, appMetrics.PostgresMetrics, logger)
+	postgresClient, err := ppostgresClient.New(ctx, &config.Postgres, appMetrics.PostgresMetrics, logger, pathToMigrations)
 	if err != nil {
 		log.Fatalf("cannot initialize postgres client: %v", err)
 	}
@@ -69,7 +70,7 @@ func main() {
 	smtpClient := SMTPClient.New(&config.SMTP, appMetrics.SMTPMetrics, logger)
 
 	worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
-
+	//
 	go func() {
 		err = worker.Run(ctx)
 		if err != nil {
@@ -127,9 +128,17 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(smtpClient, postgresClient, logger, appMetrics.SendNotificationMetrics))
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(redisClient, logger, appMetrics.SendNotificationViaTimeMetrics))
-	router.Get("/list", handlers.NewNotificationListHandler(postgresClient, logger, appMetrics.ListNotificationMetrics))
+	router.Post("/send-notification", handlers.NewSendNotificationHandler(
+		smtpClient, postgresClient, logger, appMetrics.SendNotificationMetrics),
+	)
+
+	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(
+		redisClient, postgresClient, logger, appMetrics.SendNotificationViaTimeMetrics),
+	)
+
+	router.Get("/list", handlers.NewNotificationListHandler(
+		postgresClient, logger, appMetrics.ListNotificationMetrics),
+	)
 
 	return router
 }

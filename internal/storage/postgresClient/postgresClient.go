@@ -18,7 +18,7 @@ import (
 	"notification/internal/monitoring"
 )
 
-func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, logger *zap.Logger) (*PostgresService, error) {
+func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, logger *zap.Logger, migrationsPath string) (*PostgresService, error) {
 	url := buildURL(config)
 	dsn := buildDSN(config)
 
@@ -27,7 +27,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 		return nil, err
 	}
 
-	err = upMigration(url)
+	err = upMigration(url, migrationsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -39,50 +39,58 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}, nil
 }
 
-func (ps *PostgresService) AddInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) error {
+func (ps *PostgresService) SavingInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
 	start := time.Now()
 
-	tag, err := ps.pool.Exec(ctx, queryForAddInstantSending, email.To, email.Subject, email.Message)
+	var id int
+
+	err := ps.pool.QueryRow(ctx, queryForAddInstantSending,
+		email.To, email.Subject, email.Message).
+		Scan(&id)
 	if err != nil {
-		ps.metrics.IncError("AddInstantSending")
-		ps.logger.Error("AddInstantSending: failed to add email to database", zap.Error(err))
-		return fmt.Errorf("AddInstantSending: failed to add email to database: %w", err)
+		ps.metrics.IncError("SavingInstantSending")
+		ps.logger.Error("SavingInstantSending: failed to add email to database", zap.Error(err))
+		return 0, fmt.Errorf("SavingInstantSending: failed to add email to database: %w", err)
 	}
 
-	ps.metrics.Observe("AddInstantSending", start)
+	ps.metrics.Observe("SavingInstantSending", start)
 
-	if tag.RowsAffected() != 1 {
-		ps.metrics.IncError("AddInstantSending")
-		ps.logger.Error("AddInstantSending: no rows affected", zap.Error(err))
-		return fmt.Errorf("AddInstantSending: no rows affected: %w", err)
-	}
+	ps.metrics.IncSuccess("SavingInstantSending")
 
-	ps.metrics.IncSuccess("AddInstantSending")
-	ps.logger.Info("AddInstantSending: successfully add email to database", zap.Any("email", email))
-	return nil
+	ps.logger.Info(
+		"SavingInstantSending: successfully add email to database",
+		zap.Any("email", email),
+		zap.Int("id", id),
+	)
+
+	return id, nil
 }
 
-func (ps *PostgresService) AddDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+func (ps *PostgresService) SavingDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) (int, error) {
 	start := time.Now()
 
-	tag, err := ps.pool.Exec(ctx, queryForAddDelayedSending, email.Time, email.Email.To, email.Email.Subject, email.Email.Message)
+	var id int
+
+	err := ps.pool.QueryRow(ctx, queryForAddDelayedSending,
+		email.Time, email.Email.To, email.Email.Subject, email.Email.Message).
+		Scan(&id)
 	if err != nil {
-		ps.metrics.IncError("AddDelayedSending")
-		ps.logger.Error("AddDelayedSending: failed to add email to database", zap.Error(err))
-		return fmt.Errorf("AddDelayedSending: failed to add email to database: %w", err)
+		ps.metrics.IncError("SavingDelayedSending")
+		ps.logger.Error("SavingDelayedSending: failed to add email to database", zap.Error(err))
+		return 0, fmt.Errorf("SavingDelayedSending: failed to add email to database: %w", err)
 	}
 
-	ps.metrics.Observe("AddDelayedSending", start)
+	ps.metrics.Observe("SavingDelayedSending", start)
 
-	if tag.RowsAffected() != 1 {
-		ps.metrics.IncError("AddDelayedSending")
-		ps.logger.Error("AddDelayedSending: no rows affected", zap.Error(err))
-		return fmt.Errorf("AddDelayedSending: no rows affected: %w", err)
-	}
+	ps.metrics.IncSuccess("SavingDelayedSending")
 
-	ps.metrics.IncSuccess("AddDelayedSending")
-	ps.logger.Info("AddDelayedSending: successfully add email to database", zap.Any("email", email))
-	return nil
+	ps.logger.Info(
+		"SavingDelayedSending: successfully add email to database",
+		zap.Any("email", email),
+		zap.Int("id", id),
+	)
+
+	return id, nil
 }
 
 func buildURL(config *Config) string {
@@ -111,8 +119,8 @@ func buildDSN(config *Config) string {
 	return dsn
 }
 
-func upMigration(url string) error {
-	migration, err := migrate.New("file://./database/migrations", url)
+func upMigration(url string, path string) error {
+	migration, err := migrate.New(path, url)
 	if err != nil {
 		return fmt.Errorf("failed to create migration: %w", err)
 	}

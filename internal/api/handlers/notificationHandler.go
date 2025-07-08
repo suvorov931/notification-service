@@ -15,7 +15,8 @@ import (
 	"notification/internal/storage/postgresClient"
 )
 
-func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient.PostgresClient, logger *zap.Logger, metrics monitoring.Monitoring) http.HandlerFunc {
+func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient.PostgresClient,
+	logger *zap.Logger, metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		start := time.Now()
@@ -29,14 +30,16 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 			return
 		}
 
-		email, err := decoder.DecodeEmailRequest(api.KeyForInstantSending, w, r, logger)
+		rawEmail, err := decoder.DecodeEmailRequest(api.KeyForInstantSending, w, r, logger)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationHandler: Failed to decode request", zap.Error(err))
 			return
 		}
 
-		err = sender.SendEmail(ctx, *email.(*SMTPClient.EmailMessage))
+		email := rawEmail.(*SMTPClient.EmailMessage)
+
+		err = sender.SendEmail(ctx, *email)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				metrics.IncCanceled("SendNotification")
@@ -50,14 +53,17 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 			return
 		}
 
-		if _, err = w.Write([]byte("\nSuccessfully sent notification\n")); err != nil {
-			logger.Warn("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
-		}
-
-		err = pc.AddInstantSending(ctx, email.(*SMTPClient.EmailMessage))
+		id, err := pc.SavingInstantSending(ctx, email)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Warn("NewSendNotificationHandler: Cannot put email in postgres")
+			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+			return
+		}
+
+		if err = writeResponse(w, id, "Successfully sent notification"); err != nil {
+			metrics.IncError(handlerNameForMetrics)
+			logger.Error("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
 		}
 
 		metrics.Observe(handlerNameForMetrics, start)

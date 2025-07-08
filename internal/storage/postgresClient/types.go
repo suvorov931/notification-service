@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	queryForAddInstantSending = `INSERT INTO schema_emails.instant_sending ("to", subject,message) VALUES ($1, $2, $3)`
-	queryForAddDelayedSending = `INSERT INTO schema_emails.delayed_sending (time, "to", subject,message) VALUES ($1, $2, $3, $4)`
+	queryForAddInstantSending = `INSERT INTO schema_emails.instant_sending ("to", subject,message)
+	VALUES ($1, $2, $3) RETURNING id`
+	queryForAddDelayedSending = `INSERT INTO schema_emails.delayed_sending (time, "to", subject,message)
+	VALUES ($1, $2, $3, $4) RETURNING id`
 )
 
 type Config struct {
@@ -33,19 +35,19 @@ type PostgresService struct {
 }
 
 type PostgresClient interface {
-	AddInstantSending(context.Context, *SMTPClient.EmailMessage) error
-	AddDelayedSending(context.Context, *SMTPClient.EmailMessageWithTime) error
+	SavingInstantSending(context.Context, *SMTPClient.EmailMessage) (int, error)
+	SavingDelayedSending(context.Context, *SMTPClient.EmailMessageWithTime) (int, error)
 }
 
-type MockForPostgresService struct {
+type MockPostgresService struct {
 	mock.Mock
 }
 
-func (mps *MockForPostgresService) AddInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) error {
+func (mps *MockPostgresService) SavingInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
 	args := mps.Called(ctx, email)
-	return args.Error(0)
+	return args.Get(0).(int), args.Error(1)
 }
-func (mps *MockForPostgresService) AddDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+func (mps *MockPostgresService) SavingDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) (int, error) {
 	args := mps.Called(ctx, email)
-	return args.Error(0)
+	return args.Get(0).(int), args.Error(1)
 }

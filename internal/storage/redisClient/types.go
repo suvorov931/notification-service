@@ -41,7 +41,7 @@ type MockRedisClient struct {
 }
 
 func (mrc *MockRedisClient) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
-	args := mrc.Called(ctx)
+	args := mrc.Called(ctx, email)
 	return args.Error(0)
 }
 
