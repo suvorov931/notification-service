@@ -10,7 +10,7 @@ type respMessage struct {
 	Id      int    `json:"id,omitempty"`
 }
 
-func writeResponse(w http.ResponseWriter, id int, message string) error {
+func writeResponseWithId(w http.ResponseWriter, id int, message string) error {
 	w.Header().Set("Content-Type", "application/json")
 
 	resp := respMessage{

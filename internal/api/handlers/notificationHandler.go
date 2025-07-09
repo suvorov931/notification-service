@@ -26,7 +26,7 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 		if ctx.Err() != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 			metrics.IncCanceled(handlerNameForMetrics)
-			logger.Warn("NewSendNotificationHandler: Context canceled before processing started", zap.Error(ctx.Err()))
+			logger.Error("NewSendNotificationHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
 
@@ -43,7 +43,7 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				metrics.IncCanceled("SendNotification")
-				logger.Warn("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))
+				logger.Error("NewSendNotificationHandler: Request canceled during sending", zap.Error(err))
 			} else {
 				metrics.IncError(handlerNameForMetrics)
 				logger.Error("NewSendNotificationHandler: Cannot send notification", zap.Error(err))
@@ -56,12 +56,12 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 		id, err := pc.SavingInstantSending(ctx, email)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
-			logger.Warn("NewSendNotificationHandler: Cannot put email in postgres")
+			logger.Error("NewSendNotificationHandler: Cannot put email in postgres")
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 			return
 		}
 
-		if err = writeResponse(w, id, "Successfully sent notification"); err != nil {
+		if err = writeResponseWithId(w, id, "Successfully sent notification"); err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationHandler: Cannot send report to caller", zap.Error(err))
 		}

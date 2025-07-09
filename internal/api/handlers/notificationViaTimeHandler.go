@@ -27,7 +27,7 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, pc postgresCl
 		if ctx.Err() != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 			metrics.IncCanceled(handlerNameForMetrics)
-			logger.Warn("NewSendNotificationViaTimeHandler: Context canceled before processing started", zap.Error(ctx.Err()))
+			logger.Error("NewSendNotificationViaTimeHandler: Context canceled before processing started", zap.Error(ctx.Err()))
 			return
 		}
 
@@ -44,7 +44,7 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, pc postgresCl
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				metrics.IncCanceled(handlerNameForMetrics)
-				logger.Warn("NewSendNotificationViaTimeHandler: Request canceled during sending", zap.Error(err))
+				logger.Error("NewSendNotificationViaTimeHandler: Request canceled during sending", zap.Error(err))
 			} else {
 				metrics.IncError(handlerNameForMetrics)
 				logger.Error("NewSendNotificationViaTimeHandler: Cannot send notification", zap.Error(err))
@@ -57,12 +57,12 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, pc postgresCl
 		id, err := pc.SavingDelayedSending(ctx, email)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
-			logger.Warn("NewSendNotificationViaTimeHandler: Cannot put email in postgres")
+			logger.Error("NewSendNotificationViaTimeHandler: Cannot put email in postgres")
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 			return
 		}
 
-		if err = writeResponse(w, id, "Successfully saved your mail"); err != nil {
+		if err = writeResponseWithId(w, id, "Successfully saved your mail"); err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationViaTimeHandler: Cannot send report to caller", zap.Error(err))
 		}

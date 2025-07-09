@@ -23,7 +23,7 @@ import (
 	"notification/internal/monitoring"
 	ppostgresClient "notification/internal/storage/postgresClient"
 	rredisClient "notification/internal/storage/redisClient"
-	wworker "notification/internal/worker"
+	//wworker "notification/internal/worker"
 )
 
 const (
@@ -69,14 +69,14 @@ func main() {
 
 	smtpClient := SMTPClient.New(&config.SMTP, appMetrics.SMTPMetrics, logger)
 
-	worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
+	//worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
 	//
-	go func() {
-		err = worker.Run(ctx)
-		if err != nil {
-			logger.Error("worker exited with error", zap.Error(err))
-		}
-	}()
+	//go func() {
+	//	err = worker.Run(ctx)
+	//	if err != nil {
+	//		logger.Error("worker exited with error", zap.Error(err))
+	//	}
+	//}()
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
@@ -136,7 +136,7 @@ func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.
 		redisClient, postgresClient, logger, appMetrics.SendNotificationViaTimeMetrics),
 	)
 
-	router.Get("/list", handlers.NewNotificationListHandler(
+	router.Get("/list", handlers.NewListNotificationHandler(
 		postgresClient, logger, appMetrics.ListNotificationMetrics),
 	)
 

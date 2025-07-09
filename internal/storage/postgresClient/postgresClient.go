@@ -2,8 +2,10 @@ package postgresClient
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang-migrate/migrate"
@@ -91,6 +93,55 @@ func (ps *PostgresService) SavingDelayedSending(ctx context.Context, email *SMTP
 	)
 
 	return id, nil
+}
+
+func (ps *PostgresService) FetchById(ctx context.Context, id string) (any, error) {
+	var to, subject, message string
+	t := sql.NullInt64{}
+	start := time.Now()
+
+	row := ps.pool.QueryRow(ctx, queryForFetchById, id)
+
+	err := row.Scan(&to, &subject, &message, &t)
+	if err != nil {
+		ps.metrics.IncError("FetchById")
+		ps.logger.Error("FetchById: failed to fetch email by id", zap.Error(err))
+		return nil, fmt.Errorf("FetchById: failed to fetch email by id: %w", err)
+	}
+
+	email := createModel(t, to, subject, message)
+
+	ps.metrics.Observe("FetchById", start)
+	ps.metrics.IncSuccess("FetchById")
+
+	ps.logger.Info("FetchById: successfully fetched email", zap.String("id", id))
+
+	return email, nil
+}
+
+func createModel(t sql.NullInt64, to, subject, message string) any {
+	switch {
+	case t.Valid:
+		email := &SMTPClient.EmailMessageWithTime{
+			Time: strconv.Itoa(int(t.Int64)),
+			Email: SMTPClient.EmailMessage{
+				To:      to,
+				Subject: subject,
+				Message: message,
+			},
+		}
+
+		return email
+
+	default:
+		email := &SMTPClient.EmailMessage{
+			To:      to,
+			Subject: subject,
+			Message: message,
+		}
+
+		return email
+	}
 }
 
 func buildURL(config *Config) string {
