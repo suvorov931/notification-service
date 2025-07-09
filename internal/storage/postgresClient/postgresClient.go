@@ -13,6 +13,7 @@ import (
 	_ "github.com/golang-migrate/migrate/source/file"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
@@ -21,6 +22,10 @@ import (
 )
 
 func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, logger *zap.Logger, migrationsPath string) (*PostgresService, error) {
+	if config.Timeout == 0 {
+		config.Timeout = DefaultPostgresTimeout
+	}
+
 	url := buildURL(config)
 	dsn := buildDSN(config)
 
@@ -38,21 +43,22 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 		pool:    pool,
 		metrics: metrics,
 		logger:  logger,
+		timeout: config.Timeout,
 	}, nil
 }
 
 func (ps *PostgresService) SavingInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
+	defer cancel()
+
 	start := time.Now()
 
 	var id int
 
 	err := ps.pool.QueryRow(ctx, queryForAddInstantSending,
-		email.To, email.Subject, email.Message).
-		Scan(&id)
+		email.To, email.Subject, email.Message).Scan(&id)
 	if err != nil {
-		ps.metrics.IncError("SavingInstantSending")
-		ps.logger.Error("SavingInstantSending: failed to add email to database", zap.Error(err))
-		return 0, fmt.Errorf("SavingInstantSending: failed to add email to database: %w", err)
+		return 0, ps.processContextError("SavingInstantSending", err)
 	}
 
 	ps.metrics.Observe("SavingInstantSending", start)
@@ -69,17 +75,17 @@ func (ps *PostgresService) SavingInstantSending(ctx context.Context, email *SMTP
 }
 
 func (ps *PostgresService) SavingDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
+	defer cancel()
+
 	start := time.Now()
 
 	var id int
 
 	err := ps.pool.QueryRow(ctx, queryForAddDelayedSending,
-		email.Time, email.Email.To, email.Email.Subject, email.Email.Message).
-		Scan(&id)
+		email.Time, email.Email.To, email.Email.Subject, email.Email.Message).Scan(&id)
 	if err != nil {
-		ps.metrics.IncError("SavingDelayedSending")
-		ps.logger.Error("SavingDelayedSending: failed to add email to database", zap.Error(err))
-		return 0, fmt.Errorf("SavingDelayedSending: failed to add email to database: %w", err)
+		return 0, ps.processContextError("SavingDelayedSending", err)
 	}
 
 	ps.metrics.Observe("SavingDelayedSending", start)
@@ -96,17 +102,19 @@ func (ps *PostgresService) SavingDelayedSending(ctx context.Context, email *SMTP
 }
 
 func (ps *PostgresService) FetchById(ctx context.Context, id string) (any, error) {
+	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
+	defer cancel()
+
+	start := time.Now()
+
 	var to, subject, message string
 	t := sql.NullInt64{}
-	start := time.Now()
 
 	row := ps.pool.QueryRow(ctx, queryForFetchById, id)
 
 	err := row.Scan(&to, &subject, &message, &t)
 	if err != nil {
-		ps.metrics.IncError("FetchById")
-		ps.logger.Error("FetchById: failed to fetch email by id", zap.Error(err))
-		return nil, fmt.Errorf("FetchById: failed to fetch email by id: %w", err)
+		return nil, ps.processContextError("FetchById", err)
 	}
 
 	email := createModel(t, to, subject, message)
@@ -114,16 +122,90 @@ func (ps *PostgresService) FetchById(ctx context.Context, id string) (any, error
 	ps.metrics.Observe("FetchById", start)
 	ps.metrics.IncSuccess("FetchById")
 
-	ps.logger.Info("FetchById: successfully fetched email", zap.String("id", id))
+	ps.logger.Info("FetchById: successfully fetched email by id", zap.String("id", id))
 
 	return email, nil
 }
 
-func createModel(t sql.NullInt64, to, subject, message string) any {
+func (ps *PostgresService) FetchByMail(ctx context.Context, mail string) ([]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
+	defer cancel()
+
+	start := time.Now()
+
+	rows, err := ps.pool.Query(ctx, queryForFetchByMail, mail)
+	if err != nil {
+		return nil, ps.processContextError("FetchByMail", err)
+	}
+
+	defer rows.Close()
+
+	res, err := ps.processRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	ps.metrics.Observe("FetchByMail", start)
+	ps.metrics.IncSuccess("FetchByMail")
+
+	ps.logger.Info("FetchByMail: successfully fetched email by mail", zap.String("mail", mail))
+
+	return res, nil
+}
+
+func (ps *PostgresService) processContextError(funcName string, err error) error {
 	switch {
-	case t.Valid:
+	case errors.Is(err, context.Canceled):
+		ps.metrics.IncCanceled(funcName)
+		ps.logger.Error(fmt.Sprintf("%s: context canceled", funcName), zap.Error(err))
+
+		return fmt.Errorf("%s: context canceled: %w", funcName, err)
+
+	case errors.Is(err, context.DeadlineExceeded):
+		ps.metrics.IncTimeout(funcName)
+		ps.logger.Error(fmt.Sprintf("%s: deadline context", funcName), zap.Error(err))
+
+		return fmt.Errorf("%s: deadline context: %w", funcName, err)
+
+	default:
+		ps.metrics.IncError(funcName)
+		ps.logger.Error(funcName, zap.Error(err))
+
+		return fmt.Errorf("%s: %w", funcName, err)
+	}
+}
+
+func (ps *PostgresService) processRows(rows pgx.Rows) ([]any, error) {
+	var res []any
+
+	for rows.Next() {
+		var to, subject, message string
+		var t sql.NullInt64
+
+		err := rows.Scan(&to, &subject, &message, &t)
+		if err != nil {
+			ps.metrics.IncError("FetchByMail")
+			ps.logger.Error("FetchByMail: failed to fetch email by mail", zap.Error(err))
+			return nil, fmt.Errorf("FetchByMail: failed to fetch email by mail: %w", err)
+		}
+
+		email := createModel(t, to, subject, message)
+		res = append(res, email)
+	}
+
+	if rows.Err() != nil {
+		ps.metrics.IncError("FetchByMail")
+		ps.logger.Error("FetchByMail: rows error", zap.Error(rows.Err()))
+		return nil, fmt.Errorf("FetchByMail: rows error: %w", rows.Err())
+	}
+
+	return res, nil
+}
+
+func createModel(t sql.NullInt64, to, subject, message string) any {
+	if t.Valid {
 		email := &SMTPClient.EmailMessageWithTime{
-			Time: strconv.Itoa(int(t.Int64)),
+			Time: strconv.FormatInt(t.Int64, 10),
 			Email: SMTPClient.EmailMessage{
 				To:      to,
 				Subject: subject,
@@ -133,7 +215,7 @@ func createModel(t sql.NullInt64, to, subject, message string) any {
 
 		return email
 
-	default:
+	} else {
 		email := &SMTPClient.EmailMessage{
 			To:      to,
 			Subject: subject,

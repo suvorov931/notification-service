@@ -2,6 +2,7 @@ package postgresClient
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/mock"
@@ -12,12 +13,15 @@ import (
 )
 
 const (
+	DefaultPostgresTimeout = 3 * time.Second
+
 	queryForAddInstantSending = `INSERT INTO schema_emails.instant_sending ("to", subject,message)
 	VALUES ($1, $2, $3) RETURNING id`
+
 	queryForAddDelayedSending = `INSERT INTO schema_emails.delayed_sending (time, "to", subject,message)
 	VALUES ($1, $2, $3, $4) RETURNING id`
-	queryForFetchById = `
-	WITH found AS (
+
+	queryForFetchById = `WITH found AS (
 		SELECT "to", subject, message, NULL::bigint AS time
 		FROM schema_emails.instant_sending
 		WHERE id = $1
@@ -30,30 +34,46 @@ const (
 	)
 	SELECT *
 	FROM found
-	LIMIT 1;
-	`
+	LIMIT 1;`
+
+	queryForFetchByMail = `WITH found AS (
+		SELECT "to", subject, message, NULL::bigint AS time
+		FROM schema_emails.instant_sending
+		WHERE "to" = $1
+
+		UNION ALL
+
+		SELECT "to", subject, message, time
+		FROM schema_emails.delayed_sending
+		WHERE "to" = $1
+	)
+	SELECT *
+	FROM found;`
 )
 
 type Config struct {
-	Host     string `env:"POSTGRES_HOST"`
-	Port     string `env:"POSTGRES_PORT"`
-	User     string `env:"POSTGRES_USER"`
-	Password string `env:"POSTGRES_PASSWORD"`
-	Database string `env:"POSTGRES_DATABASE"`
-	MaxConns int    `env:"POSTGRES_MAX_CONNECTIONS"`
-	MinConns int    `env:"POSTGRES_MIN_CONNECTIONS"`
+	Host     string        `env:"POSTGRES_HOST"`
+	Port     string        `env:"POSTGRES_PORT"`
+	User     string        `env:"POSTGRES_USER"`
+	Password string        `env:"POSTGRES_PASSWORD"`
+	Database string        `env:"POSTGRES_DATABASE"`
+	Timeout  time.Duration `env:"POSTGRES_TIMEOUT"`
+	MaxConns int           `env:"POSTGRES_MAX_CONNECTIONS"`
+	MinConns int           `env:"POSTGRES_MIN_CONNECTIONS"`
 }
 
 type PostgresService struct {
 	pool    *pgxpool.Pool
 	metrics monitoring.Monitoring
 	logger  *zap.Logger
+	timeout time.Duration
 }
 
 type PostgresClient interface {
 	SavingInstantSending(context.Context, *SMTPClient.EmailMessage) (int, error)
 	SavingDelayedSending(context.Context, *SMTPClient.EmailMessageWithTime) (int, error)
 	FetchById(context.Context, string) (any, error)
+	FetchByMail(context.Context, string) ([]any, error)
 }
 
 type MockPostgresService struct {

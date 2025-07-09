@@ -24,6 +24,7 @@ func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMT
 
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
+		s.metrics.IncCanceled("SendEmail")
 		s.logger.Error("SendEmail: context canceled before sending", zap.Error(ctx.Err()))
 		return fmt.Errorf("SendEmail: context canceled before sending")
 	}

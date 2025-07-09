@@ -40,26 +40,25 @@ func NewListNotificationHandler(pc postgresClient.PostgresClient, logger *zap.Lo
 	}
 }
 
+//by=all-of-delayed
+//by=all-of-instant
+
 func switchQuery(ctx context.Context, pc postgresClient.PostgresClient, q url.Values) (any, error) {
-	//qType := q.Get("type")
 	by := q.Get("by")
 	id := q.Get("id")
-	//mail := q.Get("mail")
+	mail := q.Get("mail")
 
-	var email any
+	var res any
 	var err error
 
 	switch by {
 	case "id":
-
-		email, err = pc.FetchById(ctx, id)
-
+		res, err = pc.FetchById(ctx, id)
 	case "mail":
-		//fetchByMial(mail)
-
+		res, err = pc.FetchByMail(ctx, mail)
 	case "all":
 		//fetchByAll()
 	}
 
-	return email, err
+	return res, err
 }

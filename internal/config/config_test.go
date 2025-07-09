@@ -35,6 +35,9 @@ POSTGRES_PORT=5432
 POSTGRES_USER=root
 POSTGRES_PASSWORD=postgresPassword
 POSTGRES_DATABASE=postgres
+POSTGRES_TIMEOUT=3s
+POSTGRES_MAX_CONNECTIONS=10
+POSTGRES_MIN_CONNECTIONS=5
 
 LOGGER=dev
 `
@@ -73,6 +76,9 @@ LOGGER=dev
 	assert.Equal(t, "root", cfg.Postgres.User)
 	assert.Equal(t, "postgresPassword", cfg.Postgres.Password)
 	assert.Equal(t, "postgres", cfg.Postgres.Database)
+	assert.Equal(t, 3*time.Second, cfg.Postgres.Timeout)
+	assert.Equal(t, 10, cfg.Postgres.MaxConns)
+	assert.Equal(t, 5, cfg.Postgres.MinConns)
 
 	assert.Equal(t, "dev", cfg.Logger.Env)
 
