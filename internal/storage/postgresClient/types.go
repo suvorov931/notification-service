@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
-	"notification/internal/SMTPClient"
 	"notification/internal/monitoring"
 )
 
@@ -45,11 +44,22 @@ type MockPostgresService struct {
 	mock.Mock
 }
 
-func (mps *MockPostgresService) SavingInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
+func (mps *MockPostgresService) SaveEmail(ctx context.Context, email any) (int, error) {
 	args := mps.Called(ctx, email)
 	return args.Get(0).(int), args.Error(1)
 }
-func (mps *MockPostgresService) SavingDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) (int, error) {
+
+func (mps *MockPostgresService) FetchById(ctx context.Context, email string) (any, error) {
 	args := mps.Called(ctx, email)
-	return args.Get(0).(int), args.Error(1)
+	return args.Get(0).(any), args.Error(1)
+}
+
+func (mps *MockPostgresService) FetchByMail(ctx context.Context, email string) ([]any, error) {
+	args := mps.Called(ctx, email)
+	return args.Get(0).([]any), args.Error(1)
+}
+
+func (mps *MockPostgresService) FetchByAll(ctx context.Context, email string) ([]any, error) {
+	args := mps.Called(ctx, email)
+	return args.Get(0).([]any), args.Error(1)
 }

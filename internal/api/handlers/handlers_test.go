@@ -139,7 +139,7 @@ func TestNewSendNotificationHandler(t *testing.T) {
 
 			if tt.body != "" {
 				mockSender.On("SendEmail", mock.Anything, tt.email).Return(tt.senderError)
-				mockPostgres.On("SavingInstantSending", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
+				mockPostgres.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
 			}
 
 			handler := NewSendNotificationHandler(mockSender, mockPostgres, zap.NewNop(), monitoring.NewNop())
@@ -173,12 +173,10 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessageWithTime{
-				Time: "2035-05-24 00:33:10",
-				Email: SMTPClient.EmailMessage{
-					To:      "example@gmail.com",
-					Subject: "Subject",
-					Message: "Message",
-				},
+				Time:    "2035-05-24 00:33:10",
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
 			},
 			id:                  1,
 			postgresError:       nil,
@@ -204,12 +202,10 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessageWithTime{
-				Time: "2035-05-24 00:33:10",
-				Email: SMTPClient.EmailMessage{
-					To:      "example@gmail.com",
-					Subject: "Subject",
-					Message: "Message",
-				},
+				Time:    "2035-05-24 00:33:10",
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
 			},
 			redisError:          fmt.Errorf("SendEmail: cannot send message to"),
 			wantStatusCode:      http.StatusInternalServerError,
@@ -225,12 +221,10 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessageWithTime{
-				Time: "2035-05-24 00:33:10",
-				Email: SMTPClient.EmailMessage{
-					To:      "example@gmail.com",
-					Subject: "Subject",
-					Message: "Message",
-				},
+				Time:    "2035-05-24 00:33:10",
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
 			},
 			id:                  0,
 			postgresError:       fmt.Errorf("SavingInstantSending: failed to add email to database"),
@@ -248,12 +242,10 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessageWithTime{
-				Time: "2035-05-24 00:33:10",
-				Email: SMTPClient.EmailMessage{
-					To:      "example@gmail.com",
-					Subject: "Subject",
-					Message: "Message",
-				},
+				Time:    "2035-05-24 00:33:10",
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
 			},
 			redisError:          context.Canceled,
 			wantStatusCode:      http.StatusInternalServerError,
@@ -289,7 +281,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 
 			if tt.body != "" {
 				mockRedis.On("AddDelayedEmail", mock.Anything, &tt.email).Return(tt.redisError)
-				mockPostgres.On("SavingDelayedSending", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
+				mockPostgres.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
 			}
 
 			handler := NewSendNotificationViaTimeHandler(mockRedis, mockPostgres, zap.NewNop(), monitoring.NewNop())

@@ -35,6 +35,14 @@ type Decoder[T any] struct {
 	w      http.ResponseWriter
 }
 
+func NewDecoder[T any](logger *zap.Logger, r *http.Request, w http.ResponseWriter) Decoder[T] {
+	return Decoder[T]{
+		logger: logger,
+		r:      r,
+		w:      w,
+	}
+}
+
 func (d Decoder[T]) Decode() (*T, error) {
 	var email T
 

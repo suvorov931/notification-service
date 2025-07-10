@@ -108,21 +108,27 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 		default:
 
-			var res SMTPClient.EmailMessageWithTime
+			var email SMTPClient.EmailMessageWithTime
 
-			if err := json.Unmarshal([]byte(entry), &res); err != nil {
+			if err := json.Unmarshal([]byte(entry), &email); err != nil {
 				w.metrics.IncError("Worker")
 				w.logger.Error("parseAndSendEntry: failed to unmarshal entry", zap.Error(err), zap.String("entry", entry))
 				continue
 			}
 
-			if err := w.sender.SendEmail(ctx, res.Email); err != nil {
+			res := SMTPClient.EmailMessage{
+				To:      email.To,
+				Subject: email.Subject,
+				Message: email.Message,
+			}
+
+			if err := w.sender.SendEmail(ctx, res); err != nil {
 				w.metrics.IncError("Worker")
-				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", res.Email))
+				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", res))
 				continue
 			}
 
-			w.logger.Info("Worker: successfully send delayed message", zap.Any("email", res.Email))
+			w.logger.Info("Worker: successfully send delayed message", zap.Any("email", email))
 		}
 	}
 

@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
-	"notification/internal/api"
 	"notification/internal/api/decoder"
 	"notification/internal/monitoring"
 	"notification/internal/storage/postgresClient"
@@ -31,14 +30,13 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, pc postgresCl
 			return
 		}
 
-		rawEmail, err := decoder.DecodeEmailRequest(api.KeyForDelayedSending, w, r, logger)
+		email, err := decoder.NewDecoder[SMTPClient.EmailMessageWithTime](logger, r, w).Decode()
+		//rawEmail, err := decoder.DecodeEmailRequest(api.KeyForDelayedSending, w, r, logger)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationViaTimeHandler: Failed to decode request", zap.Error(err))
 			return
 		}
-
-		email := rawEmail.(*SMTPClient.EmailMessageWithTime)
 
 		err = rc.AddDelayedEmail(ctx, email)
 		if err != nil {
