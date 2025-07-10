@@ -10,17 +10,15 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
-	"notification/internal/api"
 )
 
-func TestDecoder(t *testing.T) {
+func TestDecoderEmailMessage(t *testing.T) {
 	tests := []struct {
 		name         string
 		headerKey    string
 		headerValue  string
-		key          string
-		mail         string
-		want         any
+		email        string
+		want         *SMTPClient.EmailMessage
 		wantErr      error
 		wantStatus   int
 		wantResponse string
@@ -29,8 +27,7 @@ func TestDecoder(t *testing.T) {
 			name:        "success decoding",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "example@gmail.com",
 				"subject": "Subject",
 				"message": "Message"
@@ -48,8 +45,7 @@ func TestDecoder(t *testing.T) {
 			name:        "two fields",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "example@gmail.com",
 				"Subject": "Subject"
 			}`,
@@ -62,8 +58,7 @@ func TestDecoder(t *testing.T) {
 			name:         "empty body",
 			headerKey:    "Content-Type",
 			headerValue:  "application/json",
-			key:          api.KeyForInstantSending,
-			mail:         ``,
+			email:        ``,
 			want:         nil,
 			wantErr:      ErrEmptyBody,
 			wantStatus:   http.StatusBadRequest,
@@ -73,8 +68,7 @@ func TestDecoder(t *testing.T) {
 			name:        "non json header",
 			headerKey:   "Content-Type",
 			headerValue: "text/plain",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "To",
 				"subject": "Subject",
 				"message": "Message"
@@ -88,8 +82,7 @@ func TestDecoder(t *testing.T) {
 			name:        "non content-type header",
 			headerKey:   "",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "To",
 				"subject": "Subject",
 				"message": "Message"
@@ -103,8 +96,7 @@ func TestDecoder(t *testing.T) {
 			name:        "empty header",
 			headerKey:   "",
 			headerValue: "",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "To",
 				"subject": "Subject",
 				"message": "Message"
@@ -118,8 +110,7 @@ func TestDecoder(t *testing.T) {
 			name:        "invalid type",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": 1.23,
 				"subject": "Subject",
 				"message": "Message"
@@ -133,8 +124,7 @@ func TestDecoder(t *testing.T) {
 			name:        "wrong syntax",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				to: "To",
 				"subject": "Subject",
 				"message": "Message"
@@ -148,8 +138,7 @@ func TestDecoder(t *testing.T) {
 			name:        "unknown error",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "to",
 				"subject": "subject", 
 				"message": "message", 
@@ -164,8 +153,7 @@ func TestDecoder(t *testing.T) {
 			name:        "no valid to",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForInstantSending,
-			mail: `{
+			email: `{
 				"to": "no-valid",
 				"subject": "subject", 
 				"message": "message"
@@ -175,40 +163,51 @@ func TestDecoder(t *testing.T) {
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "No valid recipient address found\n",
 		},
-		{
-			name:        "invalid key",
-			headerKey:   "Content-Type",
-			headerValue: "application/json",
-			key:         "invalidKey",
-			mail: `{
-				"time": "2025-05-24 00:33:10",
-				"to": "example@gmail.com",
-				"subject": "Subject",
-				"message": "Message"
-			}`,
-			want:         nil,
-			wantErr:      ErrUnknownKey,
-			wantStatus:   http.StatusInternalServerError,
-			wantResponse: "Internal Server Error\n",
-		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.email))
+
+			r.Header.Set(tt.headerKey, tt.headerValue)
+
+			got, err := Decoder[SMTPClient.EmailMessage]{zap.NewNop(), r, w}.Decode()
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+			assert.Equal(t, tt.wantResponse, w.Body.String())
+			assert.ErrorIs(t, tt.wantErr, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDecoderEmailMessageWithTime(t *testing.T) {
+	tests := []struct {
+		name         string
+		headerKey    string
+		headerValue  string
+		email        string
+		want         *SMTPClient.EmailMessageWithTime
+		wantErr      error
+		wantStatus   int
+		wantResponse string
+	}{
 		{
 			name:        "success decoding with time",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForDelayedSending,
-			mail: `{
+			email: `{
 				"time": "2035-05-24 00:33:10",
 				"to": "example@gmail.com",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want: &SMTPClient.EmailMessageWithTime{
-				Time: "2035-05-24 00:33:10",
-				Email: SMTPClient.EmailMessage{
-					To:      "example@gmail.com",
-					Subject: "Subject",
-					Message: "Message",
-				},
+				Time:    "2035-05-24 00:33:10",
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
 			},
 			wantErr:      nil,
 			wantStatus:   http.StatusOK,
@@ -218,8 +217,7 @@ func TestDecoder(t *testing.T) {
 			name:        "time not at future",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForDelayedSending,
-			mail: `{
+			email: `{
 				"time": "2015-05-24 00:33:10",
 				"to": "example@gmail.com",
 				"subject": "Subject",
@@ -234,8 +232,7 @@ func TestDecoder(t *testing.T) {
 			name:        "no valid time field",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForDelayedSending,
-			mail: `{
+			email: `{
 				"time": "something",
 				"to": "example@gmail.com",
 				"subject": "Subject",
@@ -250,8 +247,7 @@ func TestDecoder(t *testing.T) {
 			name:        "invalid field time",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForDelayedSending,
-			mail: `{
+			email: `{
 				"time": 1.23,
 				"to": "To",
 				"subject": "Subject",
@@ -266,10 +262,9 @@ func TestDecoder(t *testing.T) {
 			name:        "three fields with time",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
-			key:         api.KeyForDelayedSending,
-			mail: `{
-				"To": "To",
-				"Subject": "Subject",
+			email: `{
+				"to": "example@gmail.com",
+				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want:         nil,
@@ -282,31 +277,16 @@ func TestDecoder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.mail))
+			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.email))
 
 			r.Header.Set(tt.headerKey, tt.headerValue)
 
-			gotAny, err := DecodeEmailRequest(tt.key, w, r, zap.NewNop())
+			got, err := Decoder[SMTPClient.EmailMessageWithTime]{zap.NewNop(), r, w}.Decode()
 
 			assert.Equal(t, w.Code, tt.wantStatus)
 			assert.Equal(t, w.Body.String(), tt.wantResponse)
 			assert.ErrorIs(t, err, tt.wantErr)
-
-			if err == nil {
-				switch tt.key {
-				case api.KeyForInstantSending:
-					got := gotAny.(*SMTPClient.EmailMessage)
-					want := tt.want.(*SMTPClient.EmailMessage)
-
-					assert.Equal(t, want, got)
-
-				case api.KeyForDelayedSending:
-					got := gotAny.(*SMTPClient.EmailMessageWithTime)
-					want := tt.want.(*SMTPClient.EmailMessageWithTime)
-
-					assert.Equal(t, want, got)
-				}
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

@@ -25,16 +25,11 @@ type EmailMessage struct {
 	Message string `json:"message"`
 }
 
-type TempEmailMessageWithTime struct {
+type EmailMessageWithTime struct {
 	Time    string `json:"time"`
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`
-}
-
-type EmailMessageWithTime struct {
-	Time  string
-	Email EmailMessage
 }
 
 type EmailSender interface {
