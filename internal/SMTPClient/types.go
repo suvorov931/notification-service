@@ -20,13 +20,8 @@ type Config struct {
 }
 
 type EmailMessage struct {
-	To      string `json:"to"`
-	Subject string `json:"subject"`
-	Message string `json:"message"`
-}
-
-type EmailMessageWithTime struct {
-	Time    string `json:"time"`
+	Type    string `json:"type"`
+	Time    string `json:"time,omitempty"`
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`

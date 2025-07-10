@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
+	"notification/internal/api"
 )
 
 func TestDecoderEmailMessage(t *testing.T) {
@@ -17,6 +18,7 @@ func TestDecoderEmailMessage(t *testing.T) {
 		name         string
 		headerKey    string
 		headerValue  string
+		key          string
 		email        string
 		want         *SMTPClient.EmailMessage
 		wantErr      error
@@ -27,12 +29,14 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "success decoding",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "example@gmail.com",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want: &SMTPClient.EmailMessage{
+				Type:    "instantSending",
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -45,12 +49,13 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "two fields",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "example@gmail.com",
 				"Subject": "Subject"
 			}`,
 			want:         nil,
-			wantErr:      ErrNotAllFields,
+			wantErr:      errNotAllFields,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "Not all fields in the request body are filled in\n",
 		},
@@ -58,9 +63,10 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:         "empty body",
 			headerKey:    "Content-Type",
 			headerValue:  "application/json",
+			key:          api.KeyForInstantSending,
 			email:        ``,
 			want:         nil,
-			wantErr:      ErrEmptyBody,
+			wantErr:      errEmptyBody,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "Request body must not be empty\n",
 		},
@@ -68,13 +74,14 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "non json header",
 			headerKey:   "Content-Type",
 			headerValue: "text/plain",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "To",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrHeaderNotJSON,
+			wantErr:      errHeaderNotJSON,
 			wantStatus:   http.StatusUnsupportedMediaType,
 			wantResponse: "Content-Type must be application/json\n",
 		},
@@ -82,13 +89,14 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "non content-type header",
 			headerKey:   "",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "To",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrHeaderNotJSON,
+			wantErr:      errHeaderNotJSON,
 			wantStatus:   http.StatusUnsupportedMediaType,
 			wantResponse: "Content-Type must be application/json\n",
 		},
@@ -96,13 +104,14 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "empty header",
 			headerKey:   "",
 			headerValue: "",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "To",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrHeaderNotJSON,
+			wantErr:      errHeaderNotJSON,
 			wantStatus:   http.StatusUnsupportedMediaType,
 			wantResponse: "Content-Type must be application/json\n",
 		},
@@ -110,13 +119,14 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "invalid type",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": 1.23,
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrInvalidType,
+			wantErr:      errInvalidType,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "Request body contains an invalid value for the \"to\" field (at position 16)\n",
 		},
@@ -124,13 +134,14 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "wrong syntax",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				to: "To",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrSyntaxError,
+			wantErr:      errSyntaxError,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "Request body contains badly-formed JSON (at position 7)\n",
 		},
@@ -138,6 +149,7 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "unknown error",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "to",
 				"subject": "subject", 
@@ -145,7 +157,7 @@ func TestDecoderEmailMessage(t *testing.T) {
 				"": "empty field"
 			}`,
 			want:         nil,
-			wantErr:      ErrUnknownError,
+			wantErr:      errUnknownError,
 			wantStatus:   http.StatusInternalServerError,
 			wantResponse: "Internal Server Error\n",
 		},
@@ -153,57 +165,30 @@ func TestDecoderEmailMessage(t *testing.T) {
 			name:        "no valid to",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForInstantSending,
 			email: `{
 				"to": "no-valid",
 				"subject": "subject", 
 				"message": "message"
 			}`,
 			want:         nil,
-			wantErr:      ErrNoValidRecipientAddress,
+			wantErr:      errNoValidRecipientAddress,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "No valid recipient address found\n",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			r := httptest.NewRequest("POST", "/", strings.NewReader(tt.email))
-
-			r.Header.Set(tt.headerKey, tt.headerValue)
-
-			got, err := Decoder[SMTPClient.EmailMessage]{zap.NewNop(), r, w}.Decode()
-
-			assert.Equal(t, tt.wantStatus, w.Code)
-			assert.Equal(t, tt.wantResponse, w.Body.String())
-			assert.ErrorIs(t, tt.wantErr, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestDecoderEmailMessageWithTime(t *testing.T) {
-	tests := []struct {
-		name         string
-		headerKey    string
-		headerValue  string
-		email        string
-		want         *SMTPClient.EmailMessageWithTime
-		wantErr      error
-		wantStatus   int
-		wantResponse string
-	}{
 		{
 			name:        "success decoding with time",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForDelayedSending,
 			email: `{
 				"time": "2035-05-24 00:33:10",
 				"to": "example@gmail.com",
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			want: &SMTPClient.EmailMessageWithTime{
+			want: &SMTPClient.EmailMessage{
+				Type:    "delayedSending",
 				Time:    "2035-05-24 00:33:10",
 				To:      "example@gmail.com",
 				Subject: "Subject",
@@ -217,6 +202,7 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 			name:        "time not at future",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForDelayedSending,
 			email: `{
 				"time": "2015-05-24 00:33:10",
 				"to": "example@gmail.com",
@@ -224,7 +210,7 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrTimeNotAtFuture,
+			wantErr:      errTimeNotAtFuture,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "The specified time is not in the future\n",
 		},
@@ -232,6 +218,7 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 			name:        "no valid time field",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForDelayedSending,
 			email: `{
 				"time": "something",
 				"to": "example@gmail.com",
@@ -239,7 +226,7 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrNoValidTimeFiled,
+			wantErr:      errNoValidTimeField,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "The specified time is not a valid\n",
 		},
@@ -247,6 +234,7 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 			name:        "invalid field time",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForDelayedSending,
 			email: `{
 				"time": 1.23,
 				"to": "To",
@@ -254,7 +242,7 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 				"message": "Message"
 			}`,
 			want:         nil,
-			wantErr:      ErrInvalidType,
+			wantErr:      errInvalidType,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "Request body contains an invalid value for the \"time\" field (at position 18)\n",
 		},
@@ -262,13 +250,14 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 			name:        "three fields with time",
 			headerKey:   "Content-Type",
 			headerValue: "application/json",
+			key:         api.KeyForDelayedSending,
 			email: `{
+				"time": "2035-01-02 15:04:05",
 				"to": "example@gmail.com",
-				"subject": "Subject",
-				"message": "Message"
+				"Subject": "Subject"
 			}`,
 			want:         nil,
-			wantErr:      ErrNotAllFields,
+			wantErr:      errNotAllFields,
 			wantStatus:   http.StatusBadRequest,
 			wantResponse: "Not all fields in the request body are filled in\n",
 		},
@@ -281,11 +270,11 @@ func TestDecoderEmailMessageWithTime(t *testing.T) {
 
 			r.Header.Set(tt.headerKey, tt.headerValue)
 
-			got, err := Decoder[SMTPClient.EmailMessageWithTime]{zap.NewNop(), r, w}.Decode()
+			got, err := DecodeRequest(zap.NewNop(), r, w, tt.key)
 
-			assert.Equal(t, w.Code, tt.wantStatus)
-			assert.Equal(t, w.Body.String(), tt.wantResponse)
-			assert.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, tt.wantStatus, w.Code)
+			assert.Equal(t, tt.wantResponse, w.Body.String())
+			assert.ErrorIs(t, tt.wantErr, err)
 			assert.Equal(t, tt.want, got)
 		})
 	}

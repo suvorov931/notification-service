@@ -13,91 +13,86 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
+	"notification/internal/api"
 )
 
 const emailTimeLayout = "2006-01-02 15:04:05"
 
 var (
-	ErrNotAllFields            = errors.New("checkFields: request body not all required fields are filled")
-	ErrNoValidRecipientAddress = errors.New("checkFields: no valid recipient address found")
-	ErrHeaderNotJSON           = errors.New("checkHeaders: header is not a application/json")
-	ErrSyntaxError             = errors.New("errDuringParse: request body contains badly-formed JSON")
-	ErrInvalidType             = errors.New("errDuringParse: request body contains an invalid value type")
-	ErrEmptyBody               = errors.New("decodeBody: request body must not be empty")
-	ErrTimeNotAtFuture         = errors.New("checkTime: time not at future")
-	ErrNoValidTimeFiled        = errors.New("checkTime: no valid time field")
-	ErrUnknownError            = errors.New("unknown error")
+	errNotAllFields            = errors.New("checkFields: request body not all required fields are filled")
+	errNoValidRecipientAddress = errors.New("checkFields: no valid recipient address found")
+	errHeaderNotJSON           = errors.New("checkHeaders: header is not a application/json")
+	errSyntaxError             = errors.New("errDuringParse: request body contains badly-formed JSON")
+	errInvalidType             = errors.New("errDuringParse: request body contains an invalid value type")
+	errEmptyBody               = errors.New("decodeBody: request body must not be empty")
+	errTimeNotAtFuture         = errors.New("checkTime: time not at future")
+	errNoValidTimeField        = errors.New("checkTime: no valid time field")
+	errUnknownError            = errors.New("unknown error")
 )
 
-type Decoder[T any] struct {
+type decoder struct {
 	logger *zap.Logger
 	r      *http.Request
 	w      http.ResponseWriter
 }
 
-func NewDecoder[T any](logger *zap.Logger, r *http.Request, w http.ResponseWriter) Decoder[T] {
-	return Decoder[T]{
+func DecodeRequest(logger *zap.Logger, r *http.Request, w http.ResponseWriter, sendingType string) (*SMTPClient.EmailMessage, error) {
+	d := decoder{
 		logger: logger,
 		r:      r,
 		w:      w,
 	}
-}
-
-func (d Decoder[T]) Decode() (*T, error) {
-	var email T
 
 	if err := d.checkHeaders(); err != nil {
 		return nil, err
 	}
 
-	if err := d.decodeBody(&email); err != nil {
+	email := &SMTPClient.EmailMessage{}
+
+	if err := d.decodeBody(email); err != nil {
 		return nil, d.errDuringParse(err)
 	}
 
-	if err := d.checkFields(&email); err != nil {
-		return nil, err
-	}
-
-	return &email, nil
+	return d.checkFields(email, sendingType)
 }
 
-func (d Decoder[T]) checkHeaders() error {
+func (d *decoder) checkHeaders() error {
 	ct := d.r.Header.Get("Content-Type")
 	if ct != "application/json" {
-		d.logger.Error(ErrHeaderNotJSON.Error())
+		d.logger.Error(errHeaderNotJSON.Error())
 		http.Error(d.w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
 
-		return ErrHeaderNotJSON
+		return errHeaderNotJSON
 	}
 
 	return nil
 }
 
-func (d Decoder[T]) decodeBody(target *T) error {
+func (d *decoder) decodeBody(email *SMTPClient.EmailMessage) error {
 	bodyBytes, err := io.ReadAll(d.r.Body)
 	if err != nil {
 		d.logger.Error("decodeBody: failed to read request body", zap.Error(err))
 		http.Error(d.w, "Failed to read request body", http.StatusInternalServerError)
-		return ErrUnknownError
+		return errUnknownError
 	}
 	defer d.r.Body.Close()
 
 	if len(bodyBytes) == 0 {
-		d.logger.Error(ErrEmptyBody.Error())
+		d.logger.Error(errEmptyBody.Error())
 		http.Error(d.w, "Request body must not be empty", http.StatusBadRequest)
-		return ErrEmptyBody
+		return errEmptyBody
 	}
 
 	d.r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 
 	dec := json.NewDecoder(d.r.Body)
 	dec.DisallowUnknownFields()
-	return dec.Decode(target)
+	return dec.Decode(email)
 }
 
-func (d Decoder[T]) errDuringParse(err error) error {
-	if errors.Is(err, ErrEmptyBody) {
-		return ErrEmptyBody
+func (d *decoder) errDuringParse(err error) error {
+	if errors.Is(err, errEmptyBody) {
+		return errEmptyBody
 	}
 
 	var syntaxError *json.SyntaxError
@@ -105,90 +100,70 @@ func (d Decoder[T]) errDuringParse(err error) error {
 
 	switch {
 	case errors.As(err, &syntaxError):
-		d.logger.Error(ErrSyntaxError.Error())
+		d.logger.Error(errSyntaxError.Error())
 		http.Error(d.w,
 			fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset),
 			http.StatusBadRequest)
 
-		return ErrSyntaxError
+		return errSyntaxError
 
 	case errors.As(err, &unmarshalTypeError):
-		d.logger.Error(ErrInvalidType.Error())
+		d.logger.Error(errInvalidType.Error())
 		http.Error(d.w,
 			fmt.Sprintf(
 				"Request body contains an invalid value for the %q field (at position %d)",
 				unmarshalTypeError.Field, unmarshalTypeError.Offset),
 			http.StatusBadRequest)
 
-		return ErrInvalidType
+		return errInvalidType
 
 	default:
-		d.logger.Error(ErrUnknownError.Error())
+		d.logger.Error(errUnknownError.Error())
 		http.Error(d.w, http.StatusText(500), http.StatusInternalServerError)
 
-		return ErrUnknownError
+		return errUnknownError
 	}
 }
 
-func (d Decoder[T]) checkFields(email *T) error {
-	switch v := any(*email).(type) {
-	case SMTPClient.EmailMessage:
-		if err := d.validateCommonFields(v.To, v.Subject, v.Message); err != nil {
-			return err
-		}
-
-	case SMTPClient.EmailMessageWithTime:
-		if err := d.validateCommonFields(v.To, v.Subject, v.Message); err != nil {
-			return err
-		}
-
-		if v.Time == "" {
-			d.logger.Error(ErrNotAllFields.Error())
-			http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
-			return ErrNotAllFields
-		}
-
-		if err := d.checkTime(v.Time); err != nil {
-			return err
-		}
-
-	default:
-		return ErrUnknownError
-	}
-
-	return nil
-}
-
-func (d Decoder[T]) validateCommonFields(to, subject, message string) error {
-	if to == "" || subject == "" || message == "" {
-		d.logger.Error(ErrNotAllFields.Error())
+func (d *decoder) checkFields(email *SMTPClient.EmailMessage, sendingType string) (*SMTPClient.EmailMessage, error) {
+	if email.To == "" || email.Subject == "" || email.Message == "" {
+		d.logger.Error(errNotAllFields.Error())
 		http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
-		return ErrNotAllFields
+		return nil, errNotAllFields
 	}
 
-	if _, err := mail.ParseAddress(to); err != nil {
-		d.logger.Error(ErrNoValidRecipientAddress.Error())
+	if _, err := mail.ParseAddress(email.To); err != nil {
+		d.logger.Error(errNoValidRecipientAddress.Error())
 		http.Error(d.w, "No valid recipient address found", http.StatusBadRequest)
-		return ErrNoValidRecipientAddress
+		return nil, errNoValidRecipientAddress
 	}
 
-	return nil
+	if sendingType == api.KeyForDelayedSending {
+		err := d.checkTime(email.Time)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	email.Type = sendingType
+
+	return email, nil
 }
 
-func (d Decoder[T]) checkTime(t string) error {
+func (d *decoder) checkTime(t string) error {
 	UTCTime, err := time.ParseInLocation(emailTimeLayout, t, time.UTC)
 	if err != nil {
-		d.logger.Info(ErrNoValidTimeFiled.Error())
+		d.logger.Info(errNoValidTimeField.Error())
 		http.Error(d.w, "The specified time is not a valid", http.StatusBadRequest)
 
-		return ErrNoValidTimeFiled
+		return errNoValidTimeField
 	}
 
 	if !UTCTime.After(time.Now()) {
-		d.logger.Info(ErrTimeNotAtFuture.Error())
+		d.logger.Info(errTimeNotAtFuture.Error())
 		http.Error(d.w, "The specified time is not in the future", http.StatusBadRequest)
 
-		return ErrTimeNotAtFuture
+		return errTimeNotAtFuture
 	}
 
 	return nil
