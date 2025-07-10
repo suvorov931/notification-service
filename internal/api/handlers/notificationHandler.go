@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
+	"notification/internal/api"
 	"notification/internal/api/decoder"
 	"notification/internal/monitoring"
 	"notification/internal/storage/postgresClient"
@@ -29,8 +30,7 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 			return
 		}
 
-		email, err := decoder.NewDecoder[SMTPClient.EmailMessage](logger, r, w).Decode()
-		//rawEmail, err := decoder.DecodeEmailRequest(api.KeyForInstantSending, w, r, logger)
+		email, err := decoder.DecodeRequest(logger, r, w, api.KeyForInstantSending)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationHandler: Failed to decode request", zap.Error(err))

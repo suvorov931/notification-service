@@ -47,35 +47,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}, nil
 }
 
-func (ps *PostgresService) SaveInstantEmail(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
-	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
-	defer cancel()
-
-	start := time.Now()
-
-	var id int
-
-	err := ps.pool.QueryRow(ctx, queryForSaveInstantSending,
-		email.To, email.Subject, email.Message).Scan(&id)
-
-	if err != nil {
-		return 0, ps.processContextError("SaveInstantEmail", err)
-	}
-
-	ps.metrics.Observe("SaveInstantEmail", start)
-
-	ps.metrics.IncSuccess("SaveInstantEmail")
-
-	ps.logger.Info(
-		"SaveInstantEmail: successfully add instant email to database",
-		zap.Any("email", email),
-		zap.Int("id", id),
-	)
-
-	return id, nil
-}
-
-func (ps *PostgresService) SaveDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) (int, error) {
+func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
 
@@ -243,7 +215,7 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]any, error) {
 
 func createModel(t sql.NullInt64, to, subject, message string) any {
 	if t.Valid {
-		email := &SMTPClient.EmailMessageWithTime{
+		email := &SMTPClient.EmailMessage{
 			Time:    strconv.FormatInt(t.Int64, 10),
 			To:      to,
 			Subject: subject,

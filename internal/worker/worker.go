@@ -108,7 +108,7 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 		default:
 
-			var email SMTPClient.EmailMessageWithTime
+			var email SMTPClient.EmailMessage
 
 			if err := json.Unmarshal([]byte(entry), &email); err != nil {
 				w.metrics.IncError("Worker")

@@ -24,6 +24,8 @@ import (
 	"notification/internal/monitoring"
 )
 
+// TODO: отдельные миграции для каждого тестового постгреса
+
 func TestAddDelayedEmail(t *testing.T) {
 	ctx := context.Background()
 
@@ -34,19 +36,20 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		email     *SMTPClient.EmailMessageWithTime
+		email     *SMTPClient.EmailMessage
 		wantEmail []string
 		wantErr   error
 	}{
 		{
 			name: "success add",
-			email: &SMTPClient.EmailMessageWithTime{
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
 				Time:    "2025-12-02 15:04:05",
 				To:      "daanisimov04@gmail.com",
 				Subject: "subject",
 				Message: "message",
 			},
-			wantEmail: []string{"{\"Time\":\"1764687845\",\"to\":\"daanisimov04@gmail.com\",\"subject\":\"subject\",\"message\":\"message\"}"},
+			wantEmail: []string{"{\"type\":\"delayedSending\",\"time\":\"1764687845\",\"to\":\"daanisimov04@gmail.com\",\"subject\":\"subject\",\"message\":\"message\"}"},
 			wantErr:   nil,
 		},
 	}
@@ -80,14 +83,15 @@ func TestAddDelayedEmailTimeout(t *testing.T) {
 		metrics: monitoring.NewNop(),
 	}
 
-	email := &SMTPClient.EmailMessageWithTime{
+	email := &SMTPClient.EmailMessage{
+		Type:    api.KeyForDelayedSending,
 		Time:    "2026-01-01 01:01:01",
 		To:      "daanisimov04@gmail.com",
 		Subject: "test",
 		Message: "message",
 	}
 
-	parseEmail := `{"Time":"1767229261","to":"daanisimov04@gmail.com","subject":"test","message":"message"}`
+	parseEmail := `{"type":"delayedSending","time":"1767229261","to":"daanisimov04@gmail.com","subject":"test","message":"message"}`
 
 	rdsMock.ExpectZAdd(api.KeyForDelayedSending, redis.Z{
 		Score:  float64(1767229261),
@@ -229,12 +233,13 @@ func TestParseAndConvertTime(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		email       *SMTPClient.EmailMessageWithTime
+		email       *SMTPClient.EmailMessage
 		expectedErr bool
 	}{
 		{
 			name: "success",
-			email: &SMTPClient.EmailMessageWithTime{
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
 				Time:    "2035-06-27 15:04:05",
 				To:      "test@gmail.com",
 				Subject: "subject",
@@ -244,7 +249,7 @@ func TestParseAndConvertTime(t *testing.T) {
 		},
 		{
 			name: "invalid time",
-			email: &SMTPClient.EmailMessageWithTime{
+			email: &SMTPClient.EmailMessage{
 				Time:    "invalid time",
 				To:      "test@gmail.com",
 				Subject: "subject",
@@ -270,10 +275,10 @@ func TestParseAndConvertTime(t *testing.T) {
 
 				assert.Equal(t, float64(wantScore.Unix()), score)
 
-				var wantEmail SMTPClient.EmailMessageWithTime
+				var wantEmail SMTPClient.EmailMessage
 				err = json.Unmarshal(res, &wantEmail)
 				require.NoError(t, err)
-				assert.Equal(t, tt.email, wantEmail)
+				assert.Equal(t, *tt.email, wantEmail)
 			}
 		})
 	}

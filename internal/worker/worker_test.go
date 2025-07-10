@@ -27,7 +27,7 @@ func TestWorker(t *testing.T) {
 	}{
 		{
 			name:          "successful processing",
-			redisResponse: []string{`{"Time":"1764687845","Email":{"to":"test@example.com","subject":"Test","message":"Test message"}}`},
+			redisResponse: []string{`{"Time":"1764687845","to":"test@example.com","subject":"Test","message":"Test message"}`},
 			redisError:    nil,
 			wantEmail: &SMTPClient.EmailMessage{
 				To:      "test@example.com",
@@ -63,7 +63,7 @@ func TestWorker(t *testing.T) {
 		},
 		{
 			name:          "SendEmail returns error",
-			redisResponse: []string{`{"Time":"1764687845","Email":{"to":"test@example.com","subject":"Test","message":"Test message"}}`},
+			redisResponse: []string{`{"Time":"1764687845","to":"test@example.com","subject":"Test","message":"Test message"}`},
 			redisError:    nil,
 			wantEmail: &SMTPClient.EmailMessage{
 				To:      "test@example.com",
@@ -84,8 +84,8 @@ func TestWorker(t *testing.T) {
 
 		mockRedis.On("CheckRedis", mock.Anything).Return(
 			[]string{
-				`{"Time":"1764687845","Email":{"to":"test1@example.com","subject":"Test1","message":"Test message1"}}`,
-				`{"Time":"1764687845","Email":{"to":"test2@example.com","subject":"Test2","message":"Test message2"}}`,
+				`{"Time":"1764687845","to":"test1@example.com","subject":"Test1","message":"Test message1"}`,
+				`{"Time":"1764687845","to":"test2@example.com","subject":"Test2","message":"Test message2"}`,
 			},
 			nil,
 		)

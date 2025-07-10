@@ -42,7 +42,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}, nil
 }
 
-func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessage) error {
 	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
 
@@ -100,7 +100,7 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessageWithTime) ([]byte, float64, error) {
+func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessage) ([]byte, float64, error) {
 	UTCTime, err := time.ParseInLocation(emailTimeLayout, email.Time, time.UTC)
 	if err != nil {
 		rc.logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))

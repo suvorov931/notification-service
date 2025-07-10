@@ -32,7 +32,7 @@ type RedisCluster struct {
 }
 
 type RedisClient interface {
-	AddDelayedEmail(context.Context, *SMTPClient.EmailMessageWithTime) error
+	AddDelayedEmail(context.Context, *SMTPClient.EmailMessage) error
 	CheckRedis(context.Context) ([]string, error)
 }
 
@@ -40,7 +40,7 @@ type MockRedisClient struct {
 	mock.Mock
 }
 
-func (mrc *MockRedisClient) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+func (mrc *MockRedisClient) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessage) error {
 	args := mrc.Called(ctx, email)
 	return args.Error(0)
 }

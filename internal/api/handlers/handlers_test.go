@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
+	"notification/internal/api"
 	"notification/internal/monitoring"
 	"notification/internal/storage/postgresClient"
 	"notification/internal/storage/redisClient"
@@ -39,6 +40,8 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				Time:    "",
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -66,6 +69,8 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				Time:    "",
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -83,6 +88,8 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				Time:    "",
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -102,6 +109,8 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				Time:    "",
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -156,7 +165,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 		name                string
 		requestContext      context.Context
 		body                string
-		email               SMTPClient.EmailMessageWithTime
+		email               SMTPClient.EmailMessage
 		id                  int
 		postgresError       error
 		redisError          error
@@ -172,7 +181,8 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			email: SMTPClient.EmailMessageWithTime{
+			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
 				Time:    "2035-05-24 00:33:10",
 				To:      "example@gmail.com",
 				Subject: "Subject",
@@ -201,7 +211,8 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			email: SMTPClient.EmailMessageWithTime{
+			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
 				Time:    "2035-05-24 00:33:10",
 				To:      "example@gmail.com",
 				Subject: "Subject",
@@ -220,7 +231,8 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			email: SMTPClient.EmailMessageWithTime{
+			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
 				Time:    "2035-05-24 00:33:10",
 				To:      "example@gmail.com",
 				Subject: "Subject",
@@ -241,7 +253,8 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
-			email: SMTPClient.EmailMessageWithTime{
+			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
 				Time:    "2035-05-24 00:33:10",
 				To:      "example@gmail.com",
 				Subject: "Subject",
