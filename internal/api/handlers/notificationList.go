@@ -27,6 +27,7 @@ func NewListNotificationHandler(pc postgresClient.PostgresClient, logger *zap.Lo
 		}
 
 		query := r.URL.Query()
+
 		email, err := switchQuery(ctx, pc, query)
 		if err != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
@@ -40,13 +41,12 @@ func NewListNotificationHandler(pc postgresClient.PostgresClient, logger *zap.Lo
 	}
 }
 
-//by=all-of-delayed
-//by=all-of-instant
-
 func switchQuery(ctx context.Context, pc postgresClient.PostgresClient, q url.Values) (any, error) {
 	by := q.Get("by")
+
 	id := q.Get("id")
 	mail := q.Get("mail")
+	all := q.Get("all")
 
 	var res any
 	var err error
@@ -57,7 +57,7 @@ func switchQuery(ctx context.Context, pc postgresClient.PostgresClient, q url.Va
 	case "mail":
 		res, err = pc.FetchByMail(ctx, mail)
 	case "all":
-		//fetchByAll()
+		res, err = pc.FetchByAll(ctx, all)
 	}
 
 	return res, err

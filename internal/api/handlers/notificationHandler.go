@@ -53,7 +53,7 @@ func NewSendNotificationHandler(sender SMTPClient.EmailSender, pc postgresClient
 			return
 		}
 
-		id, err := pc.SavingInstantSending(ctx, email)
+		id, err := pc.SaveEmail(ctx, email)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationHandler: Cannot put email in postgres")

@@ -54,7 +54,7 @@ func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, pc postgresCl
 			return
 		}
 
-		id, err := pc.SavingDelayedSending(ctx, email)
+		id, err := pc.SaveEmail(ctx, email)
 		if err != nil {
 			metrics.IncError(handlerNameForMetrics)
 			logger.Error("NewSendNotificationViaTimeHandler: Cannot put email in postgres")

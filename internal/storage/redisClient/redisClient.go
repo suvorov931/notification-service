@@ -85,8 +85,6 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 		return nil, rc.processContextError("CheckRedis", err)
 	}
 
-	rc.metrics.IncSuccess("ZRangeByScore")
-
 	if len(res) != 0 {
 		err = rc.cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
 

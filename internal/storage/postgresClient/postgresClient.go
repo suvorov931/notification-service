@@ -47,53 +47,35 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}, nil
 }
 
-func (ps *PostgresService) SavingInstantSending(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
+func (ps *PostgresService) SaveEmail(ctx context.Context, email any) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
 
 	start := time.Now()
 
 	var id int
+	var err error
 
-	err := ps.pool.QueryRow(ctx, queryForAddInstantSending,
-		email.To, email.Subject, email.Message).Scan(&id)
-	if err != nil {
-		return 0, ps.processContextError("SavingInstantSending", err)
+	switch e := email.(type) {
+	case *SMTPClient.EmailMessage:
+		err = ps.pool.QueryRow(ctx, queryForAddInstantSending,
+			e.To, e.Subject, e.Message).Scan(&id)
+
+	case *SMTPClient.EmailMessageWithTime:
+		err = ps.pool.QueryRow(ctx, queryForAddDelayedSending,
+			e.Time, e.Email.To, e.Email.Subject, e.Email.Message).Scan(&id)
 	}
 
-	ps.metrics.Observe("SavingInstantSending", start)
-
-	ps.metrics.IncSuccess("SavingInstantSending")
-
-	ps.logger.Info(
-		"SavingInstantSending: successfully add email to database",
-		zap.Any("email", email),
-		zap.Int("id", id),
-	)
-
-	return id, nil
-}
-
-func (ps *PostgresService) SavingDelayedSending(ctx context.Context, email *SMTPClient.EmailMessageWithTime) (int, error) {
-	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
-	defer cancel()
-
-	start := time.Now()
-
-	var id int
-
-	err := ps.pool.QueryRow(ctx, queryForAddDelayedSending,
-		email.Time, email.Email.To, email.Email.Subject, email.Email.Message).Scan(&id)
 	if err != nil {
-		return 0, ps.processContextError("SavingDelayedSending", err)
+		return 0, ps.processContextError("SaveEmail", err)
 	}
 
-	ps.metrics.Observe("SavingDelayedSending", start)
+	ps.metrics.Observe("SaveEmail", start)
 
-	ps.metrics.IncSuccess("SavingDelayedSending")
+	ps.metrics.IncSuccess("SaveEmail")
 
 	ps.logger.Info(
-		"SavingDelayedSending: successfully add email to database",
+		"SaveEmail: successfully add email to database",
 		zap.Any("email", email),
 		zap.Int("id", id),
 	)
@@ -153,6 +135,43 @@ func (ps *PostgresService) FetchByMail(ctx context.Context, mail string) ([]any,
 	return res, nil
 }
 
+func (ps *PostgresService) FetchByAll(ctx context.Context, qType string) ([]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
+	defer cancel()
+
+	start := time.Now()
+
+	var query string
+
+	switch qType {
+	case "instant":
+		query = queryForFetchByAllInstantSending
+	case "delayed":
+		query = queryForFetchByAllDelayedSending
+	case "all":
+		query = queryForFetchByAll
+	}
+
+	rows, err := ps.pool.Query(ctx, query)
+	if err != nil {
+		return nil, ps.processContextError("FetchByAll", err)
+	}
+
+	defer rows.Close()
+
+	res, err := ps.processRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	ps.metrics.Observe("FetchByAll", start)
+	ps.metrics.IncSuccess("FetchByAll")
+
+	ps.logger.Info("FetchByAll: successfully fetched email by al")
+
+	return res, nil
+}
+
 func (ps *PostgresService) processContextError(funcName string, err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -184,9 +203,9 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]any, error) {
 
 		err := rows.Scan(&to, &subject, &message, &t)
 		if err != nil {
-			ps.metrics.IncError("FetchByMail")
-			ps.logger.Error("FetchByMail: failed to fetch email by mail", zap.Error(err))
-			return nil, fmt.Errorf("FetchByMail: failed to fetch email by mail: %w", err)
+			ps.metrics.IncError("processRows")
+			ps.logger.Error("processRows: failed to fetch email", zap.Error(err))
+			return nil, fmt.Errorf("processRows: failed to fetch email: %w", err)
 		}
 
 		email := createModel(t, to, subject, message)
@@ -194,9 +213,9 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]any, error) {
 	}
 
 	if rows.Err() != nil {
-		ps.metrics.IncError("FetchByMail")
-		ps.logger.Error("FetchByMail: rows error", zap.Error(rows.Err()))
-		return nil, fmt.Errorf("FetchByMail: rows error: %w", rows.Err())
+		ps.metrics.IncError("processRows")
+		ps.logger.Error("processRows: rows error", zap.Error(rows.Err()))
+		return nil, fmt.Errorf("processRows: rows error: %w", rows.Err())
 	}
 
 	return res, nil
