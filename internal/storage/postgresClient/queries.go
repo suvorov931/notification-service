@@ -1,11 +1,8 @@
 package postgresClient
 
 const (
-	queryForSaveInstantSending = `INSERT INTO schema_emails.instant_sending ("to", subject,message)
-	VALUES ($1, $2, $3) RETURNING id`
-
-	queryForSaveDelayedSending = `INSERT INTO schema_emails.delayed_sending (time, "to", subject,message)
-	VALUES ($1, $2, $3, $4) RETURNING id`
+	queryForSaveEmail = `INSERT INTO schema_emails.emails (type, time, "to", subject, message)
+	VALUES ($1, $2, $3, $4, $5) RETURNING id`
 
 	queryForFetchById = `WITH found AS (
 		SELECT "to", subject, message, NULL::bigint AS time

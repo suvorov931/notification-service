@@ -55,19 +55,19 @@ func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.Emai
 
 	var id int
 
-	err := ps.pool.QueryRow(ctx, queryForSaveDelayedSending,
-		email.To, email.Subject, email.Message).Scan(&id)
+	err := ps.pool.QueryRow(ctx, queryForSaveEmail,
+		email.Type, email.Time, email.To, email.Subject, email.Message).Scan(&id)
 
 	if err != nil {
-		return 0, ps.processContextError("SaveDelayedEmail", err)
+		return 0, ps.processContextError("SaveEmail", err)
 	}
 
-	ps.metrics.Observe("SaveDelayedEmail", start)
+	ps.metrics.Observe("SaveEmail", start)
 
-	ps.metrics.IncSuccess("SaveDelayedEmail")
+	ps.metrics.IncSuccess("SaveEmail")
 
 	ps.logger.Info(
-		"SaveDelayedEmail: successfully add delayed email to database",
+		"SaveEmail: successfully add delayed email to database",
 		zap.Any("email", email),
 		zap.Int("id", id),
 	)
