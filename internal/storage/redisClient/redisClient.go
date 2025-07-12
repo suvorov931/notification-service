@@ -100,6 +100,36 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
+func (rc *RedisCluster) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), rc.timeout)
+	defer cancel()
+
+	start := time.Now()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- rc.cluster.Close()
+	}()
+
+	select {
+	case <-ctx.Done():
+		rc.metrics.IncTimeout("Close")
+		rc.logger.Error("Close: timeout closing redis cluster")
+		return fmt.Errorf("Close: timeout closing redis cluster: %w", ctx.Err())
+
+	case err := <-done:
+		if err != nil {
+			rc.metrics.IncError("Close")
+			rc.logger.Error("Close: cannot close cluster", zap.Error(err))
+			return err
+		}
+
+		rc.metrics.Observe("Close", start)
+		rc.metrics.IncSuccess("Close")
+		return nil
+	}
+}
+
 func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessage) ([]byte, float64, error) {
 	UTCTime, err := time.ParseInLocation(emailTimeLayout, email.Time, time.UTC)
 	if err != nil {

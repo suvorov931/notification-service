@@ -144,14 +144,23 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			r.Header.Set("content-type", "application/json")
 
 			mockSender := &SMTPClient.MockEmailSender{}
-			mockPostgres := &postgresClient.MockPostgresService{}
+			mockRedisClient := &redisClient.MockRedisClient{}
+			mockPostgresClient := &postgresClient.MockPostgresService{}
+
+			notificationHandler := New(
+				zap.NewNop(),
+				mockSender,
+				mockRedisClient,
+				mockPostgresClient,
+			)
 
 			if tt.body != "" {
 				mockSender.On("SendEmail", mock.Anything, tt.email).Return(tt.senderError)
-				mockPostgres.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
+				mockPostgresClient.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
+
 			}
 
-			handler := NewSendNotificationHandler(mockSender, mockPostgres, zap.NewNop(), monitoring.NewNop())
+			handler := notificationHandler.NewSendNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)
 
 			assert.Equal(t, tt.wantStatusCode, w.Code)
@@ -285,19 +294,107 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest("POST", "/send-notification", strings.NewReader(tt.body)).WithContext(tt.requestContext)
+			r := httptest.NewRequest("POST", "/send-notification-via-time", strings.NewReader(tt.body)).WithContext(tt.requestContext)
 			w := httptest.NewRecorder()
 			r.Header.Set("content-type", "application/json")
 
-			mockRedis := &redisClient.MockRedisClient{}
-			mockPostgres := &postgresClient.MockPostgresService{}
+			mockSender := &SMTPClient.MockEmailSender{}
+			mockRedisClient := &redisClient.MockRedisClient{}
+			mockPostgresClient := &postgresClient.MockPostgresService{}
+
+			notificationHandler := New(
+				zap.NewNop(),
+				mockSender,
+				mockRedisClient,
+				mockPostgresClient,
+			)
 
 			if tt.body != "" {
-				mockRedis.On("AddDelayedEmail", mock.Anything, &tt.email).Return(tt.redisError)
-				mockPostgres.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
+				mockRedisClient.On("AddDelayedEmail", mock.Anything, &tt.email).Return(tt.redisError)
+				mockPostgresClient.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
 			}
 
-			handler := NewSendNotificationViaTimeHandler(mockRedis, mockPostgres, zap.NewNop(), monitoring.NewNop())
+			handler := notificationHandler.NewSendNotificationViaTimeHandler(monitoring.NewNop())
+			handler.ServeHTTP(w, r)
+
+			assert.Equal(t, tt.wantStatusCode, w.Code)
+			assert.Equal(t, tt.wantResponseMessage, w.Body.String())
+		})
+	}
+}
+
+func TestNewListNotificationHandler(t *testing.T) {
+	tests := []struct {
+		name                string
+		requestContext      context.Context
+		email               []*SMTPClient.EmailMessage
+		query               string
+		id                  int
+		wantError           error
+		wantStatusCode      int
+		wantResponseMessage string
+	}{
+		{
+			name:           "success for instantSending",
+			requestContext: context.Background(),
+			email: []*SMTPClient.EmailMessage{&SMTPClient.EmailMessage{
+				Type:    "instantSending",
+				Time:    "",
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=id&id=1",
+			id:                  1,
+			wantError:           nil,
+			wantStatusCode:      http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"instantSending\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:           "success for delayedSending",
+			requestContext: context.Background(),
+			email: []*SMTPClient.EmailMessage{&SMTPClient.EmailMessage{
+				Type:    "delayedSending",
+				Time:    "time",
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=id&id=2",
+			id:                  2,
+			wantError:           nil,
+			wantStatusCode:      http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"time\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:                "invalid query",
+			requestContext:      context.Background(),
+			query:               "/list?invalidQuery",
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: ErrInvalidQuery.Error() + "\n",
+		},
+	}
+	// TODO: валидация query
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", tt.query, nil).WithContext(tt.requestContext)
+			w := httptest.NewRecorder()
+			r.Header.Set("content-type", "application/json")
+
+			mockSender := &SMTPClient.MockEmailSender{}
+			mockRedisClient := &redisClient.MockRedisClient{}
+			mockPostgresClient := &postgresClient.MockPostgresService{}
+
+			notificationHandler := New(
+				zap.NewNop(),
+				mockSender,
+				mockRedisClient,
+				mockPostgresClient,
+			)
+
+			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.email, tt.wantError)
+
+			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)
 
 			assert.Equal(t, tt.wantStatusCode, w.Code)

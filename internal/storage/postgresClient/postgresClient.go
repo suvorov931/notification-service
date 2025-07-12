@@ -2,10 +2,8 @@ package postgresClient
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/golang-migrate/migrate"
@@ -67,7 +65,7 @@ func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.Emai
 	ps.metrics.IncSuccess("SaveEmail")
 
 	ps.logger.Info(
-		"SaveEmail: successfully add delayed email to database",
+		"SaveEmail: successfully add email to database",
 		zap.Any("email", email),
 		zap.Int("id", id),
 	)
@@ -75,39 +73,44 @@ func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.Emai
 	return id, nil
 }
 
-func (ps *PostgresService) FetchById(ctx context.Context, id string) (any, error) {
+func (ps *PostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient.EmailMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
 
 	start := time.Now()
 
-	var to, subject, message string
-	t := sql.NullInt64{}
+	var sendingType, sendingTime, to, subject, message string
 
 	row := ps.pool.QueryRow(ctx, queryForFetchById, id)
 
-	err := row.Scan(&to, &subject, &message, &t)
+	err := row.Scan(&sendingType, &sendingTime, &to, &subject, &message)
 	if err != nil {
 		return nil, ps.processContextError("FetchById", err)
 	}
 
-	email := createModel(t, to, subject, message)
+	res := &SMTPClient.EmailMessage{
+		Type:    sendingType,
+		Time:    sendingTime,
+		To:      to,
+		Subject: subject,
+		Message: message,
+	}
 
 	ps.metrics.Observe("FetchById", start)
 	ps.metrics.IncSuccess("FetchById")
 
-	ps.logger.Info("FetchById: successfully fetched email by id", zap.String("id", id))
+	ps.logger.Info("FetchById: successfully fetched email by id", zap.Int("id", id))
 
-	return email, nil
+	return []*SMTPClient.EmailMessage{res}, nil
 }
 
-func (ps *PostgresService) FetchByMail(ctx context.Context, mail string) ([]any, error) {
+func (ps *PostgresService) FetchByEmail(ctx context.Context, email string) ([]*SMTPClient.EmailMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
 
 	start := time.Now()
-
-	rows, err := ps.pool.Query(ctx, queryForFetchByMail, mail)
+	fmt.Println(email)
+	rows, err := ps.pool.Query(ctx, queryForFetchByEmail, email)
 	if err != nil {
 		return nil, ps.processContextError("FetchByMail", err)
 	}
@@ -122,29 +125,18 @@ func (ps *PostgresService) FetchByMail(ctx context.Context, mail string) ([]any,
 	ps.metrics.Observe("FetchByMail", start)
 	ps.metrics.IncSuccess("FetchByMail")
 
-	ps.logger.Info("FetchByMail: successfully fetched email by mail", zap.String("mail", mail))
+	ps.logger.Info("FetchByMail: successfully fetched email by mail", zap.String("mail", email))
 
 	return res, nil
 }
 
-func (ps *PostgresService) FetchByAll(ctx context.Context, qType string) ([]any, error) {
+func (ps *PostgresService) FetchByAll(ctx context.Context) ([]*SMTPClient.EmailMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
 
 	start := time.Now()
 
-	var query string
-
-	switch qType {
-	case "instant":
-		query = queryForFetchByAllInstantSending
-	case "delayed":
-		query = queryForFetchByAllDelayedSending
-	case "all":
-		query = queryForFetchByAll
-	}
-
-	rows, err := ps.pool.Query(ctx, query)
+	rows, err := ps.pool.Query(ctx, queryForFetchByAll)
 	if err != nil {
 		return nil, ps.processContextError("FetchByAll", err)
 	}
@@ -162,6 +154,10 @@ func (ps *PostgresService) FetchByAll(ctx context.Context, qType string) ([]any,
 	ps.logger.Info("FetchByAll: successfully fetched email by al")
 
 	return res, nil
+}
+
+func (ps *PostgresService) Close() {
+	ps.pool.Close()
 }
 
 func (ps *PostgresService) processContextError(funcName string, err error) error {
@@ -186,22 +182,28 @@ func (ps *PostgresService) processContextError(funcName string, err error) error
 	}
 }
 
-func (ps *PostgresService) processRows(rows pgx.Rows) ([]any, error) {
-	var res []any
+func (ps *PostgresService) processRows(rows pgx.Rows) ([]*SMTPClient.EmailMessage, error) {
+	var emails []*SMTPClient.EmailMessage
 
 	for rows.Next() {
-		var to, subject, message string
-		var t sql.NullInt64
+		var sendingType, sendingTime, to, subject, message string
 
-		err := rows.Scan(&to, &subject, &message, &t)
+		err := rows.Scan(&sendingType, &sendingTime, &to, &subject, &message)
 		if err != nil {
 			ps.metrics.IncError("processRows")
 			ps.logger.Error("processRows: failed to fetch email", zap.Error(err))
 			return nil, fmt.Errorf("processRows: failed to fetch email: %w", err)
 		}
 
-		email := createModel(t, to, subject, message)
-		res = append(res, email)
+		email := &SMTPClient.EmailMessage{
+			Type:    sendingType,
+			Time:    sendingTime,
+			To:      to,
+			Subject: subject,
+			Message: message,
+		}
+
+		emails = append(emails, email)
 	}
 
 	if rows.Err() != nil {
@@ -210,29 +212,7 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]any, error) {
 		return nil, fmt.Errorf("processRows: rows error: %w", rows.Err())
 	}
 
-	return res, nil
-}
-
-func createModel(t sql.NullInt64, to, subject, message string) any {
-	if t.Valid {
-		email := &SMTPClient.EmailMessage{
-			Time:    strconv.FormatInt(t.Int64, 10),
-			To:      to,
-			Subject: subject,
-			Message: message,
-		}
-
-		return email
-
-	} else {
-		email := &SMTPClient.EmailMessage{
-			To:      to,
-			Subject: subject,
-			Message: message,
-		}
-
-		return email
-	}
+	return emails, nil
 }
 
 func buildURL(config *Config) string {

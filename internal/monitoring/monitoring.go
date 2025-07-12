@@ -38,17 +38,17 @@ type AppMetrics struct {
 
 func NewAppMetrics() *AppMetrics {
 	return &AppMetrics{
-		RedisMetrics:                   new("Redis"),
-		PostgresMetrics:                new("Postgres"),
-		WorkerMetrics:                  new("Worker"),
-		SMTPMetrics:                    new("SMTP"),
-		ListNotificationMetrics:        new("ListNotification"),
-		SendNotificationMetrics:        new("SendNotification"),
-		SendNotificationViaTimeMetrics: new("SendNotificationViaTime"),
+		RedisMetrics:                   New("Redis"),
+		PostgresMetrics:                New("Postgres"),
+		WorkerMetrics:                  New("Worker"),
+		SMTPMetrics:                    New("SMTP"),
+		ListNotificationMetrics:        New("ListNotification"),
+		SendNotificationMetrics:        New("SendNotification"),
+		SendNotificationViaTimeMetrics: New("SendNotificationViaTime"),
 	}
 }
 
-func new(name string) *Metrics {
+func New(name string) *Metrics {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: name + "_operations_total",
 		Help: "Total count of " + name + " operations",

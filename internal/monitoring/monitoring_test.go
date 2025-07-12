@@ -9,7 +9,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	m := new("testNew")
+	m := New("testNew")
 
 	require.NotNil(t, m.Counter)
 	require.NotNil(t, m.Duration)
@@ -30,7 +30,7 @@ func TestNewAppMetrics(t *testing.T) {
 }
 
 func TestInc(t *testing.T) {
-	m := new("testInc")
+	m := New("testInc")
 
 	tests := []struct {
 		name    string
@@ -84,7 +84,7 @@ func TestInc(t *testing.T) {
 }
 
 func TestObserve(t *testing.T) {
-	m := new("testObserve")
+	m := New("testObserve")
 
 	m.Observe("operation", time.Now())
 

@@ -23,13 +23,14 @@ import (
 	"notification/internal/monitoring"
 	ppostgresClient "notification/internal/storage/postgresClient"
 	rredisClient "notification/internal/storage/redisClient"
-	//wworker "notification/internal/worker"
+	wworker "notification/internal/worker"
 )
 
 const (
-	pathToConfigFile  = "./config/config.env"
-	pathToMigrations  = "file://./database/migrations"
-	tickTimeForWorker = 1 * time.Second
+	pathToConfigFile     = "./config/config.env"
+	pathToMigrationsFile = "file://./database/migrations"
+	tickTimeForWorker    = 1 * time.Second
+	shoutdownTime        = 30 * time.Second
 )
 
 func main() {
@@ -49,11 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
-	defer func() {
-		if err = logger.Sync(); err != nil {
-			log.Printf("cannot sync logger: %v", err)
-		}
-	}()
+	defer logger.Sync()
 
 	appMetrics := monitoring.NewAppMetrics()
 
@@ -62,21 +59,21 @@ func main() {
 		logger.Fatal("cannot initialize redisClient client", zap.Error(err))
 	}
 
-	postgresClient, err := ppostgresClient.New(ctx, &config.Postgres, appMetrics.PostgresMetrics, logger, pathToMigrations)
+	postgresClient, err := ppostgresClient.New(ctx, &config.Postgres, appMetrics.PostgresMetrics, logger, pathToMigrationsFile)
 	if err != nil {
 		log.Fatalf("cannot initialize postgres client: %v", err)
 	}
 
 	smtpClient := SMTPClient.New(&config.SMTP, appMetrics.SMTPMetrics, logger)
 
-	//worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
-	//
-	//go func() {
-	//	err = worker.Run(ctx)
-	//	if err != nil {
-	//		logger.Error("worker exited with error", zap.Error(err))
-	//	}
-	//}()
+	worker := wworker.New(redisClient, smtpClient, tickTimeForWorker, appMetrics.WorkerMetrics, logger)
+
+	go func() {
+		err = worker.Run(ctx)
+		if err != nil {
+			logger.Error("worker exited with error", zap.Error(err))
+		}
+	}()
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
@@ -102,15 +99,28 @@ func main() {
 	}()
 
 	<-ctx.Done()
+
+	gracefulShutdown(logger, &srv, postgresClient, redisClient)
+}
+
+func gracefulShutdown(logger *zap.Logger, srv *http.Server,
+	postgresClient ppostgresClient.PostgresClient, redisClient rredisClient.RedisClient) {
 	logger.Info("received shutdown signal")
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shoutdownTime)
 	defer shutdownCancel()
 
 	logger.Info("shutting down http server")
-	if err = srv.Shutdown(shutdownCtx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("cannot shutdown http server", zap.Error(err))
 		return
+	}
+
+	postgresClient.Close()
+
+	err := redisClient.Close()
+	if err != nil {
+		logger.Error(err.Error())
 	}
 
 	logger.Info("stopping http server", zap.String("addr", srv.Addr))
@@ -118,13 +128,13 @@ func main() {
 	logger.Info("application shutdown completed successfully")
 }
 
-func initRouter(logger *zap.Logger, cfg *llogger.Config, smtpClient *SMTPClient.SMTPClient,
+func initRouter(logger *zap.Logger, loggerConfig *llogger.Config, smtpClient *SMTPClient.SMTPClient,
 	redisClient *rredisClient.RedisCluster, postgresClient *ppostgresClient.PostgresService, appMetrics *monitoring.AppMetrics) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(llogger.MiddlewareLogger(logger, cfg))
+	router.Use(llogger.MiddlewareLogger(logger, loggerConfig))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 

@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -11,61 +9,47 @@ import (
 	"notification/internal/api"
 	"notification/internal/api/decoder"
 	"notification/internal/monitoring"
-	"notification/internal/storage/postgresClient"
-	"notification/internal/storage/redisClient"
 )
 
-func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, pc postgresClient.PostgresClient,
-	logger *zap.Logger, metrics monitoring.Monitoring) http.HandlerFunc {
+func (nh *NotificationHandler) NewSendNotificationViaTimeHandler(metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		start := time.Now()
 
-		handlerNameForMetrics := "SendNotificationViaTime"
+		handlerName := "SendNotificationViaTime"
 
-		if ctx.Err() != nil {
-			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-			metrics.IncCanceled(handlerNameForMetrics)
-			logger.Error("NewSendNotificationViaTimeHandler: Context canceled before processing started", zap.Error(ctx.Err()))
+		if nh.checkCtxCanceled(ctx, w, metrics, handlerName) {
 			return
 		}
 
-		email, err := decoder.DecodeRequest(logger, r, w, api.KeyForDelayedSending)
+		email, err := decoder.DecodeRequest(nh.logger, r, w, api.KeyForDelayedSending)
 		if err != nil {
-			metrics.IncError(handlerNameForMetrics)
-			logger.Error("NewSendNotificationViaTimeHandler: Failed to decode request", zap.Error(err))
+			metrics.IncError(handlerName)
+			nh.logger.Error("NewSendNotificationViaTimeHandler: Failed to decode request", zap.Error(err))
 			return
 		}
 
-		err = rc.AddDelayedEmail(ctx, email)
+		err = nh.redisClient.AddDelayedEmail(ctx, email)
 		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				metrics.IncCanceled(handlerNameForMetrics)
-				logger.Error("NewSendNotificationViaTimeHandler: Request canceled during sending", zap.Error(err))
-			} else {
-				metrics.IncError(handlerNameForMetrics)
-				logger.Error("NewSendNotificationViaTimeHandler: Cannot send notification", zap.Error(err))
-			}
-
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+			metrics.IncError(handlerName)
+			nh.logger.Error("NewSendNotificationViaTimeHandler: Cannot add entry", zap.Error(err))
+
 			return
 		}
 
-		id, err := pc.SaveEmail(ctx, email)
+		id, err := nh.postgresClient.SaveEmail(ctx, email)
 		if err != nil {
-			metrics.IncError(handlerNameForMetrics)
-			logger.Error("NewSendNotificationViaTimeHandler: Cannot put email in postgres")
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+			metrics.IncError(handlerName)
+			nh.logger.Error("NewSendNotificationViaTimeHandler: Cannot put email in postgres")
+
 			return
 		}
 
-		if err = writeResponseWithId(w, id, "Successfully saved your mail"); err != nil {
-			metrics.IncError(handlerNameForMetrics)
-			logger.Error("NewSendNotificationViaTimeHandler: Cannot send report to caller", zap.Error(err))
-		}
+		nh.writeResponseWithId(w, id, "Successfully saved your mail", metrics, handlerName)
 
-		metrics.Observe(handlerNameForMetrics, start)
-
-		metrics.IncSuccess(handlerNameForMetrics)
+		metrics.Observe(handlerName, start)
+		metrics.IncSuccess(handlerName)
 	}
 }

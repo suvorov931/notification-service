@@ -36,9 +36,10 @@ type PostgresService struct {
 
 type PostgresClient interface {
 	SaveEmail(context.Context, *SMTPClient.EmailMessage) (int, error)
-	FetchById(context.Context, string) (any, error)
-	FetchByMail(context.Context, string) ([]any, error)
-	FetchByAll(context.Context, string) ([]any, error)
+	FetchById(context.Context, int) ([]*SMTPClient.EmailMessage, error)
+	FetchByEmail(context.Context, string) ([]*SMTPClient.EmailMessage, error)
+	FetchByAll(context.Context) ([]*SMTPClient.EmailMessage, error)
+	Close()
 }
 
 type MockPostgresService struct {
@@ -50,17 +51,19 @@ func (mps *MockPostgresService) SaveEmail(ctx context.Context, email *SMTPClient
 	return args.Get(0).(int), args.Error(1)
 }
 
-func (mps *MockPostgresService) FetchById(ctx context.Context, email string) (any, error) {
-	args := mps.Called(ctx, email)
-	return args.Get(0).(any), args.Error(1)
+func (mps *MockPostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient.EmailMessage, error) {
+	args := mps.Called(ctx, id)
+	return args.Get(0).([]*SMTPClient.EmailMessage), args.Error(1)
 }
 
-func (mps *MockPostgresService) FetchByMail(ctx context.Context, email string) ([]any, error) {
+func (mps *MockPostgresService) FetchByEmail(ctx context.Context, email string) ([]*SMTPClient.EmailMessage, error) {
 	args := mps.Called(ctx, email)
-	return args.Get(0).([]any), args.Error(1)
+	return args.Get(0).([]*SMTPClient.EmailMessage), args.Error(1)
 }
 
-func (mps *MockPostgresService) FetchByAll(ctx context.Context, email string) ([]any, error) {
-	args := mps.Called(ctx, email)
-	return args.Get(0).([]any), args.Error(1)
+func (mps *MockPostgresService) FetchByAll(ctx context.Context) ([]*SMTPClient.EmailMessage, error) {
+	args := mps.Called(ctx)
+	return args.Get(0).([]*SMTPClient.EmailMessage), args.Error(1)
 }
+
+func (mps *MockPostgresService) Close() {}
