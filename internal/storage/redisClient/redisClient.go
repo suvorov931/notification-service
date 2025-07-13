@@ -131,21 +131,25 @@ func (rc *RedisCluster) Close() error {
 }
 
 func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessage) ([]byte, float64, error) {
-	UTCTime, err := time.ParseInLocation(emailTimeLayout, email.Time, time.UTC)
-	if err != nil {
-		rc.logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
-		return nil, 0, fmt.Errorf("parseAndConvertTime: cannot parse email.Time: %s: %w", email.Time, err)
+	unixTime := email.Time.Unix()
+
+	t := strconv.FormatInt(unixTime, 10)
+
+	jsonStruct := SMTPClient.TempEmailMessage{
+		Type:    email.Type,
+		Time:    t,
+		To:      email.To,
+		Subject: email.Subject,
+		Message: email.Message,
 	}
 
-	email.Time = strconv.Itoa(int(UTCTime.Unix()))
-
-	jsonEmail, err := json.Marshal(email)
+	jsonEmail, err := json.Marshal(jsonStruct)
 	if err != nil {
-		rc.logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
-		return nil, 0, fmt.Errorf("parseAndConvertTime: failed to marshal email: %w", err)
+		rc.logger.Error("parseAndConvertEmail: failed to marshal email", zap.Error(err))
+		return nil, 0, fmt.Errorf("parseAndConvertEmail: failed to marshal email: %w", err)
 	}
 
-	return jsonEmail, float64(UTCTime.Unix()), nil
+	return jsonEmail, float64(email.Time.Unix()), nil
 }
 
 func (rc *RedisCluster) processContextError(funcName string, err error) error {

@@ -79,7 +79,8 @@ func (ps *PostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient
 
 	start := time.Now()
 
-	var sendingType, sendingTime, to, subject, message string
+	var sendingType, to, subject, message string
+	var sendingTime *time.Time
 
 	row := ps.pool.QueryRow(ctx, queryForFetchById, id)
 
@@ -186,7 +187,8 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]*SMTPClient.EmailMessag
 	var emails []*SMTPClient.EmailMessage
 
 	for rows.Next() {
-		var sendingType, sendingTime, to, subject, message string
+		var sendingType, to, subject, message string
+		var sendingTime *time.Time
 
 		err := rows.Scan(&sendingType, &sendingTime, &to, &subject, &message)
 		if err != nil {

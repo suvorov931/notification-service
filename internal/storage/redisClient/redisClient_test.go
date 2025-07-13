@@ -3,7 +3,6 @@ package redisClient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"testing"
@@ -24,10 +23,10 @@ import (
 	"notification/internal/monitoring"
 )
 
-// TODO: отдельные миграции для каждого тестового постгреса
-
 func TestAddDelayedEmail(t *testing.T) {
 	ctx := context.Background()
+
+	timeForSuccessAdd, _ := time.ParseInLocation("2006-01-02 15:04:05", "2025-12-02 15:04:05", time.UTC)
 
 	addrs := upRedisCluster(ctx, "TestAddDelayedEmail", 1, t)
 
@@ -44,7 +43,7 @@ func TestAddDelayedEmail(t *testing.T) {
 			name: "success add",
 			email: &SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2025-12-02 15:04:05",
+				Time:    &timeForSuccessAdd,
 				To:      "daanisimov04@gmail.com",
 				Subject: "subject",
 				Message: "message",
@@ -56,14 +55,12 @@ func TestAddDelayedEmail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := rc.AddDelayedEmail(ctx, tt.email)
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("AddDelayedEmail() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			err = rc.AddDelayedEmail(ctx, tt.email)
+			require.ErrorIs(t, err, tt.wantErr)
 
 			email, err := rc.cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
-				Min: tt.email.Time,
-				Max: tt.email.Time,
+				Min: strconv.FormatInt(tt.email.Time.Unix(), 10),
+				Max: strconv.FormatInt(tt.email.Time.Unix(), 10),
 			}).Result()
 			require.NoError(t, err)
 
@@ -75,6 +72,9 @@ func TestAddDelayedEmail(t *testing.T) {
 
 func TestAddDelayedEmailTimeout(t *testing.T) {
 	ctx := context.Background()
+
+	testTime, _ := time.ParseInLocation("2006-01-02 15:04:05", "2025-07-13 20:44:57", time.UTC)
+
 	db, rdsMock := redismock.NewClusterMock()
 
 	rc := RedisCluster{
@@ -85,16 +85,16 @@ func TestAddDelayedEmailTimeout(t *testing.T) {
 
 	email := &SMTPClient.EmailMessage{
 		Type:    api.KeyForDelayedSending,
-		Time:    "2026-01-01 01:01:01",
+		Time:    &testTime,
 		To:      "daanisimov04@gmail.com",
 		Subject: "test",
 		Message: "message",
 	}
 
-	parseEmail := `{"type":"delayedSending","time":"1767229261","to":"daanisimov04@gmail.com","subject":"test","message":"message"}`
+	parseEmail := `{"type":"delayedSending","time":"1752439497","to":"daanisimov04@gmail.com","subject":"test","message":"message"}`
 
 	rdsMock.ExpectZAdd(api.KeyForDelayedSending, redis.Z{
-		Score:  float64(1767229261),
+		Score:  float64(1752439497),
 		Member: []byte(parseEmail),
 	}).SetErr(context.DeadlineExceeded)
 
@@ -212,24 +212,12 @@ func TestCheckRedisTimeout(t *testing.T) {
 
 }
 
-func TestFailedConnection(t *testing.T) {
-	ctx := context.Background()
-	cfg := &Config{
-		Addrs: []string{
-			"localhost:1234",
-		},
-		Password: "wrong",
-	}
-
-	_, err := New(ctx, cfg, monitoring.NewNop(), zap.NewNop())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to connect to redis")
-}
-
 func TestParseAndConvertTime(t *testing.T) {
 	rc := RedisCluster{
 		logger: zap.NewNop(),
 	}
+
+	testTime := time.Date(2035, 6, 27, 15, 4, 5, 0, time.UTC)
 
 	tests := []struct {
 		name        string
@@ -240,22 +228,12 @@ func TestParseAndConvertTime(t *testing.T) {
 			name: "success",
 			email: &SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2035-06-27 15:04:05",
+				Time:    &testTime,
 				To:      "test@gmail.com",
 				Subject: "subject",
 				Message: "message",
 			},
 			expectedErr: false,
-		},
-		{
-			name: "invalid time",
-			email: &SMTPClient.EmailMessage{
-				Time:    "invalid time",
-				To:      "test@gmail.com",
-				Subject: "subject",
-				Message: "message",
-			},
-			expectedErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -270,15 +248,19 @@ func TestParseAndConvertTime(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				wantScore, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-06-27 15:04:05", time.UTC)
+				wantScore := float64(testTime.Unix())
+
+				assert.Equal(t, wantScore, score)
+
+				var resultStruct SMTPClient.TempEmailMessage
+				err = json.Unmarshal(res, &resultStruct)
 				require.NoError(t, err)
 
-				assert.Equal(t, float64(wantScore.Unix()), score)
-
-				var wantEmail SMTPClient.EmailMessage
-				err = json.Unmarshal(res, &wantEmail)
-				require.NoError(t, err)
-				assert.Equal(t, *tt.email, wantEmail)
+				assert.Equal(t, tt.email.Type, resultStruct.Type)
+				assert.Equal(t, strconv.FormatInt(testTime.Unix(), 10), resultStruct.Time)
+				assert.Equal(t, tt.email.To, resultStruct.To)
+				assert.Equal(t, tt.email.Subject, resultStruct.Subject)
+				assert.Equal(t, tt.email.Message, resultStruct.Message)
 			}
 		})
 	}

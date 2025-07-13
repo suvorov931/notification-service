@@ -47,13 +47,18 @@ func DecodeRequest(logger *zap.Logger, r *http.Request, w http.ResponseWriter, s
 		return nil, err
 	}
 
-	email := &SMTPClient.EmailMessage{}
+	email := &SMTPClient.TempEmailMessage{}
 
 	if err := d.decodeBody(email); err != nil {
 		return nil, d.errDuringParse(err)
 	}
 
-	return d.checkFields(email, sendingType)
+	email, err := d.checkFields(email, sendingType)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.convert(email)
 }
 
 func (d *decoder) checkHeaders() error {
@@ -68,7 +73,7 @@ func (d *decoder) checkHeaders() error {
 	return nil
 }
 
-func (d *decoder) decodeBody(email *SMTPClient.EmailMessage) error {
+func (d *decoder) decodeBody(email *SMTPClient.TempEmailMessage) error {
 	bodyBytes, err := io.ReadAll(d.r.Body)
 	if err != nil {
 		d.logger.Error("decodeBody: failed to read request body", zap.Error(err))
@@ -125,7 +130,7 @@ func (d *decoder) errDuringParse(err error) error {
 	}
 }
 
-func (d *decoder) checkFields(email *SMTPClient.EmailMessage, sendingType string) (*SMTPClient.EmailMessage, error) {
+func (d *decoder) checkFields(email *SMTPClient.TempEmailMessage, sendingType string) (*SMTPClient.TempEmailMessage, error) {
 	if email.To == "" || email.Subject == "" || email.Message == "" {
 		d.logger.Error(errNotAllFields.Error())
 		http.Error(d.w, "Not all fields in the request body are filled in", http.StatusBadRequest)
@@ -167,4 +172,30 @@ func (d *decoder) checkTime(t string) error {
 	}
 
 	return nil
+}
+
+func (d *decoder) convert(email *SMTPClient.TempEmailMessage) (*SMTPClient.EmailMessage, error) {
+	res := &SMTPClient.EmailMessage{
+		Type:    email.Type,
+		To:      email.To,
+		Subject: email.Subject,
+		Message: email.Message,
+	}
+
+	if email.Time != "" {
+		t, err := time.Parse(emailTimeLayout, email.Time)
+		if err != nil {
+			d.logger.Error("convert: cannot parse email.Time", zap.Error(err))
+			return nil, fmt.Errorf("convert: cannot parse email.Time: %s: %w", email.Time, err)
+		}
+
+		tUnix := time.Unix(t.Unix(), 0).UTC()
+
+		res.Time = &tUnix
+
+	} else {
+		res.Time = nil
+	}
+
+	return res, nil
 }

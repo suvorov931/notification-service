@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -14,6 +15,8 @@ import (
 )
 
 func TestDecoderEmailMessage(t *testing.T) {
+	timeForSuccessDecodingWithTime, _ := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
+
 	tests := []struct {
 		name         string
 		headerKey    string
@@ -189,7 +192,7 @@ func TestDecoderEmailMessage(t *testing.T) {
 			}`,
 			want: &SMTPClient.EmailMessage{
 				Type:    "delayedSending",
-				Time:    "2035-05-24 00:33:10",
+				Time:    &timeForSuccessDecodingWithTime,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",

@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
@@ -41,7 +43,7 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForInstantSending,
-				Time:    "",
+				Time:    nil,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -70,7 +72,7 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForInstantSending,
-				Time:    "",
+				Time:    nil,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -89,7 +91,7 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForInstantSending,
-				Time:    "",
+				Time:    nil,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -110,7 +112,7 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForInstantSending,
-				Time:    "",
+				Time:    nil,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -170,6 +172,9 @@ func TestNewSendNotificationHandler(t *testing.T) {
 }
 
 func TestNewSendNotificationViaTimeHandler(t *testing.T) {
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name                string
 		requestContext      context.Context
@@ -192,7 +197,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2035-05-24 00:33:10",
+				Time:    &testTime,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -222,7 +227,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2035-05-24 00:33:10",
+				Time:    &testTime,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -242,7 +247,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2035-05-24 00:33:10",
+				Time:    &testTime,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -264,7 +269,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 			}`,
 			email: SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2035-05-24 00:33:10",
+				Time:    &testTime,
 				To:      "example@gmail.com",
 				Subject: "Subject",
 				Message: "Message",
@@ -324,6 +329,9 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 }
 
 func TestNewListNotificationHandler(t *testing.T) {
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name                string
 		requestContext      context.Context
@@ -339,7 +347,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 			requestContext: context.Background(),
 			email: []*SMTPClient.EmailMessage{&SMTPClient.EmailMessage{
 				Type:    "instantSending",
-				Time:    "",
+				Time:    nil,
 				To:      "to",
 				Subject: "subject",
 				Message: "message",
@@ -355,7 +363,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 			requestContext: context.Background(),
 			email: []*SMTPClient.EmailMessage{&SMTPClient.EmailMessage{
 				Type:    "delayedSending",
-				Time:    "time",
+				Time:    &testTime,
 				To:      "to",
 				Subject: "subject",
 				Message: "message",
@@ -364,7 +372,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 			id:                  2,
 			wantError:           nil,
 			wantStatusCode:      http.StatusOK,
-			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"time\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
 		{
 			name:                "invalid query",

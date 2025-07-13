@@ -138,17 +138,13 @@ func initRouter(logger *zap.Logger, loggerConfig *llogger.Config, smtpClient *SM
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/send-notification", handlers.NewSendNotificationHandler(
-		smtpClient, postgresClient, logger, appMetrics.SendNotificationMetrics),
-	)
+	notificationHandler := handlers.New(logger, smtpClient, redisClient, postgresClient)
 
-	router.Post("/send-notification-via-time", handlers.NewSendNotificationViaTimeHandler(
-		redisClient, postgresClient, logger, appMetrics.SendNotificationViaTimeMetrics),
-	)
+	router.Post("/send-notification", notificationHandler.NewSendNotificationHandler(appMetrics.SendNotificationMetrics))
 
-	router.Get("/list", handlers.NewListNotificationHandler(
-		postgresClient, logger, appMetrics.ListNotificationMetrics),
-	)
+	router.Post("/send-notification-via-time", notificationHandler.NewSendNotificationViaTimeHandler(appMetrics.SendNotificationViaTimeMetrics))
+
+	router.Get("/list", notificationHandler.NewListNotificationHandler(appMetrics.ListNotificationMetrics))
 
 	return router
 }

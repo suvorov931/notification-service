@@ -108,7 +108,7 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 		default:
 
-			var email SMTPClient.EmailMessage
+			var email SMTPClient.TempEmailMessage
 
 			if err := json.Unmarshal([]byte(entry), &email); err != nil {
 				w.metrics.IncError("Worker")
@@ -124,7 +124,7 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 			if err := w.sender.SendEmail(ctx, res); err != nil {
 				w.metrics.IncError("Worker")
-				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", res))
+				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", email))
 				continue
 			}
 

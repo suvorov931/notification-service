@@ -3,6 +3,7 @@ package postgresClient
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,10 +16,14 @@ import (
 	"notification/internal/monitoring"
 )
 
+// TODO: отдельные миграции для каждого тестового постгреса
+
 const pathToTestMigrations = "file://../../../database/migrations"
 
 func TestSaveEmail(t *testing.T) {
 	ctx := context.Background()
+
+	testTime := time.Unix(time.Now().Unix(), 0).UTC()
 
 	postgresService := upPostgres("postgres-for-test-SaveEmail", t)
 
@@ -43,7 +48,7 @@ func TestSaveEmail(t *testing.T) {
 			name: "success for instant delayed",
 			wantEmail: &SMTPClient.EmailMessage{
 				Type:    api.KeyForDelayedSending,
-				Time:    "2067737470",
+				Time:    &testTime,
 				To:      "to",
 				Subject: "delayed",
 				Message: "message",
@@ -62,13 +67,15 @@ func TestSaveEmail(t *testing.T) {
 			q := `SELECT type, time, "to", subject, message FROM schema_emails.emails WHERE subject = $1`
 			row := postgresService.pool.QueryRow(ctx, q, tt.wantEmail.Subject)
 
-			var sendingType, time, to, subject, message string
-			err = row.Scan(&sendingType, &time, &to, &subject, &message)
+			var sendingType, to, subject, message string
+			var sendingTime *time.Time
+
+			err = row.Scan(&sendingType, &sendingTime, &to, &subject, &message)
 			require.NoError(t, err)
 
 			gotEmail := &SMTPClient.EmailMessage{
 				Type:    sendingType,
-				Time:    time,
+				Time:    sendingTime,
 				To:      to,
 				Subject: subject,
 				Message: message,

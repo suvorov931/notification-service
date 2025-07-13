@@ -2,6 +2,7 @@ package SMTPClient
 
 import (
 	"context"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -19,12 +20,20 @@ type Config struct {
 	BasicRetryPause int    `yaml:"BASIC_RETRY_PAUSE" env:"BASIC_RETRY_PAUSE"`
 }
 
-type EmailMessage struct {
+type TempEmailMessage struct {
 	Type    string `json:"type"`
-	Time    string `json:"time,omitempty"`
+	Time    string `json:"time"`
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Message string `json:"message"`
+}
+
+type EmailMessage struct {
+	Type    string     `json:"type"`
+	Time    *time.Time `json:"time,omitempty"`
+	To      string     `json:"to"`
+	Subject string     `json:"subject"`
+	Message string     `json:"message"`
 }
 
 type EmailSender interface {
