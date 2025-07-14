@@ -2,9 +2,11 @@ package postgresClient
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -15,8 +17,6 @@ import (
 	"notification/internal/api"
 	"notification/internal/monitoring"
 )
-
-// TODO: отдельные миграции для каждого тестового постгреса
 
 const pathToTestMigrations = "file://../../../database/migrations"
 
@@ -83,6 +83,292 @@ func TestSaveEmail(t *testing.T) {
 
 			assert.Equal(t, tt.wantId, gotId)
 			assert.Equal(t, tt.wantEmail, gotEmail)
+		})
+	}
+}
+
+func TestFetchById(t *testing.T) {
+	ctx := context.Background()
+
+	postgresService := upPostgres("postgres-for-test-FetchById", t)
+
+	insertData := func(insertSQL string) {
+		_, err := postgresService.pool.Exec(ctx, insertSQL)
+		require.NoError(t, err)
+	}
+
+	clearData := func() {
+		_, err := postgresService.pool.Exec(ctx, `DELETE FROM schema_emails.emails`)
+		require.NoError(t, err)
+	}
+
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-07-13 21:58:00", time.UTC)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		setup     func(insertSQL string)
+		insertSQL string
+		id        int
+		want      []*SMTPClient.EmailMessage
+		wantErr   error
+	}{
+		{
+			name: "success for instant sending",
+			setup: func(insertSQL string) {
+				clearData()
+				insertData(insertSQL)
+			},
+			insertSQL: `INSERT INTO schema_emails.emails (id ,type, time, "to", subject, message) VALUES
+			(1,'instantSending', null, 'to', 'subject', 'message');`,
+			id: 1,
+			want: []*SMTPClient.EmailMessage{{
+				Type:    api.KeyForInstantSending,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			wantErr: nil,
+		},
+		{
+			name: "success for delayed sending",
+			setup: func(insertSQL string) {
+				clearData()
+				insertData(insertSQL)
+			},
+			insertSQL: `INSERT INTO schema_emails.emails (id ,type, time, "to", subject, message) VALUES
+			(2,'delayedSending', '2035-07-13 21:58:00', 'to', 'subject', 'message');`,
+			id: 2,
+			want: []*SMTPClient.EmailMessage{{
+				Type:    api.KeyForDelayedSending,
+				Time:    &testTime,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			wantErr: nil,
+		},
+		{
+			name: "id not exists",
+			setup: func(insertSQL string) {
+				clearData()
+			},
+			id:      0,
+			want:    nil,
+			wantErr: pgx.ErrNoRows,
+		},
+		{
+			name: "negative id",
+			setup: func(insertSQL string) {
+				clearData()
+			},
+			id:      -1,
+			want:    nil,
+			wantErr: pgx.ErrNoRows,
+		},
+		{
+			name: "large id",
+			setup: func(insertSQL string) {
+				clearData()
+			},
+			id:      math.MaxInt32,
+			want:    nil,
+			wantErr: pgx.ErrNoRows,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(tt.insertSQL)
+
+			got, err := postgresService.FetchById(ctx, tt.id)
+
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestFetchByEmail(t *testing.T) {
+	ctx := context.Background()
+
+	postgresService := upPostgres("postgres-for-test-FetchByEmail", t)
+
+	insertData := func(insertSQL string) {
+		_, err := postgresService.pool.Exec(ctx, insertSQL)
+		require.NoError(t, err)
+	}
+
+	clearData := func() {
+		_, err := postgresService.pool.Exec(ctx, `DELETE FROM schema_emails.emails`)
+		require.NoError(t, err)
+	}
+
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-07-13 21:58:00", time.UTC)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		setup     func(insertSQL string)
+		insertSQL string
+		email     string
+		want      []*SMTPClient.EmailMessage
+		wantErr   error
+	}{
+		{
+			name: "success for instant sending",
+			setup: func(insertSQL string) {
+				clearData()
+				insertData(insertSQL)
+			},
+			insertSQL: `INSERT INTO schema_emails.emails (id ,type, time, "to", subject, message) VALUES 
+        	(1,'instantSending', null, 'to', 'subject', 'message');`,
+			email: "to",
+			want: []*SMTPClient.EmailMessage{{
+				Type:    api.KeyForInstantSending,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			wantErr: nil,
+		},
+		{
+			name:  "success for delayed sending",
+			email: "to1",
+			setup: func(insertSQL string) {
+				clearData()
+				insertData(insertSQL)
+			},
+			insertSQL: `INSERT INTO schema_emails.emails (id ,type, time, "to", subject, message) VALUES 
+        	(2,'delayedSending', '2035-07-13 21:58:00', 'to1', 'subject', 'message');`,
+			want: []*SMTPClient.EmailMessage{{
+				Type:    api.KeyForDelayedSending,
+				Time:    &testTime,
+				To:      "to1",
+				Subject: "subject",
+				Message: "message",
+			}},
+			wantErr: nil,
+		},
+		{
+			name:  "multiple entry",
+			email: "common",
+			setup: func(insertSQL string) {
+				clearData()
+				insertData(insertSQL)
+			},
+			insertSQL: `INSERT INTO schema_emails.emails (id ,type, time, "to", subject, message) VALUES 
+			(1,'instantSending', null, 'common', 'subject', 'message'),
+        	(2,'delayedSending', '2035-07-13 21:58:00', 'common', 'subject', 'message');`,
+			want: []*SMTPClient.EmailMessage{
+				{
+					Type:    api.KeyForInstantSending,
+					To:      "common",
+					Subject: "subject",
+					Message: "message",
+				},
+				{
+					Type:    api.KeyForDelayedSending,
+					Time:    &testTime,
+					To:      "common",
+					Subject: "subject",
+					Message: "message",
+				},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "email not exists",
+			setup: func(insertSQL string) {
+				clearData()
+			},
+			email:   "somethingEmail",
+			want:    nil,
+			wantErr: pgx.ErrNoRows,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(tt.insertSQL)
+
+			got, err := postgresService.FetchByEmail(ctx, tt.email)
+
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestFetchByAll(t *testing.T) {
+	ctx := context.Background()
+
+	postgresService := upPostgres("postgres-for-test-FetchByAll", t)
+
+	insertData := func(insertSQL string) {
+		_, err := postgresService.pool.Exec(ctx, insertSQL)
+		require.NoError(t, err)
+	}
+
+	clearData := func() {
+		_, err := postgresService.pool.Exec(ctx, `DELETE FROM schema_emails.emails`)
+		require.NoError(t, err)
+	}
+
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-07-13 21:58:00", time.UTC)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		setup     func(insertSQL string)
+		insertSQL string
+		want      []*SMTPClient.EmailMessage
+		wantErr   error
+	}{
+		{
+			name: "success",
+			setup: func(insertSQL string) {
+				clearData()
+				insertData(insertSQL)
+			},
+			insertSQL: `INSERT INTO schema_emails.emails (id ,type, time, "to", subject, message) VALUES
+			(1,'instantSending', null, 'to', 'subject', 'message'),
+			(2,'delayedSending', '2035-07-13 21:58:00', 'to', 'subject', 'message');`,
+			want: []*SMTPClient.EmailMessage{
+				{
+					Type:    api.KeyForInstantSending,
+					To:      "to",
+					Subject: "subject",
+					Message: "message",
+				},
+				{
+					Type:    api.KeyForDelayedSending,
+					Time:    &testTime,
+					To:      "to",
+					Subject: "subject",
+					Message: "message",
+				},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "entry not exists",
+			setup: func(insertSQL string) {
+				clearData()
+			},
+			want:    nil,
+			wantErr: pgx.ErrNoRows,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(tt.insertSQL)
+
+			got, err := postgresService.FetchByAll(ctx)
+
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }

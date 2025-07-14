@@ -57,7 +57,7 @@ func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.Emai
 		email.Type, email.Time, email.To, email.Subject, email.Message).Scan(&id)
 
 	if err != nil {
-		return 0, ps.processContextError("SaveEmail", err)
+		return 0, ps.processError("SaveEmail", err)
 	}
 
 	ps.metrics.Observe("SaveEmail", start)
@@ -86,7 +86,7 @@ func (ps *PostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient
 
 	err := row.Scan(&sendingType, &sendingTime, &to, &subject, &message)
 	if err != nil {
-		return nil, ps.processContextError("FetchById", err)
+		return nil, ps.processError("FetchById", err)
 	}
 
 	res := &SMTPClient.EmailMessage{
@@ -110,10 +110,10 @@ func (ps *PostgresService) FetchByEmail(ctx context.Context, email string) ([]*S
 	defer cancel()
 
 	start := time.Now()
-	fmt.Println(email)
+
 	rows, err := ps.pool.Query(ctx, queryForFetchByEmail, email)
 	if err != nil {
-		return nil, ps.processContextError("FetchByMail", err)
+		return nil, ps.processError("FetchByMail", err)
 	}
 
 	defer rows.Close()
@@ -139,7 +139,7 @@ func (ps *PostgresService) FetchByAll(ctx context.Context) ([]*SMTPClient.EmailM
 
 	rows, err := ps.pool.Query(ctx, queryForFetchByAll)
 	if err != nil {
-		return nil, ps.processContextError("FetchByAll", err)
+		return nil, ps.processError("FetchByAll", err)
 	}
 
 	defer rows.Close()
@@ -161,7 +161,7 @@ func (ps *PostgresService) Close() {
 	ps.pool.Close()
 }
 
-func (ps *PostgresService) processContextError(funcName string, err error) error {
+func (ps *PostgresService) processError(funcName string, err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
 		ps.metrics.IncCanceled(funcName)
@@ -174,6 +174,11 @@ func (ps *PostgresService) processContextError(funcName string, err error) error
 		ps.logger.Error(fmt.Sprintf("%s: deadline context", funcName), zap.Error(err))
 
 		return fmt.Errorf("%s: deadline context: %w", funcName, err)
+
+	case errors.Is(err, pgx.ErrNoRows):
+		ps.logger.Error(fmt.Sprintf("%s: no rows in result set", funcName), zap.Error(err))
+
+		return fmt.Errorf("%s: %w", funcName, err)
 
 	default:
 		ps.metrics.IncError(funcName)
@@ -211,7 +216,12 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]*SMTPClient.EmailMessag
 	if rows.Err() != nil {
 		ps.metrics.IncError("processRows")
 		ps.logger.Error("processRows: rows error", zap.Error(rows.Err()))
+
 		return nil, fmt.Errorf("processRows: rows error: %w", rows.Err())
+	}
+
+	if len(emails) == 0 {
+		return nil, pgx.ErrNoRows
 	}
 
 	return emails, nil

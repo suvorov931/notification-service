@@ -345,7 +345,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 		{
 			name:           "success for instantSending",
 			requestContext: context.Background(),
-			email: []*SMTPClient.EmailMessage{&SMTPClient.EmailMessage{
+			email: []*SMTPClient.EmailMessage{{
 				Type:    "instantSending",
 				Time:    nil,
 				To:      "to",
@@ -361,7 +361,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 		{
 			name:           "success for delayedSending",
 			requestContext: context.Background(),
-			email: []*SMTPClient.EmailMessage{&SMTPClient.EmailMessage{
+			email: []*SMTPClient.EmailMessage{{
 				Type:    "delayedSending",
 				Time:    &testTime,
 				To:      "to",
