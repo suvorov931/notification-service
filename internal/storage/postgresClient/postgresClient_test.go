@@ -87,6 +87,64 @@ func TestSaveEmail(t *testing.T) {
 	}
 }
 
+func TestSaveEmailWithContext(t *testing.T) {
+	postgresService := upPostgres("postgres-for-test-SaveEmailWithContext", t)
+
+	tests := []struct {
+		name    string
+		setup   func() context.Context
+		email   *SMTPClient.EmailMessage
+		wantId  int
+		wantErr error
+	}{
+		{
+			name: "timeout exceeded",
+			setup: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				time.Sleep(2 * time.Millisecond)
+
+				return ctx
+			},
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			},
+			wantId:  0,
+			wantErr: context.DeadlineExceeded,
+		},
+		{
+			name: "context canceled",
+			setup: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			},
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			},
+			wantId:  0,
+			wantErr: context.Canceled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := tt.setup()
+
+			id, err := postgresService.SaveEmail(ctx, tt.email)
+
+			assert.Equal(t, tt.wantId, id)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestFetchById(t *testing.T) {
 	ctx := context.Background()
 
@@ -180,6 +238,54 @@ func TestFetchById(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup(tt.insertSQL)
+
+			got, err := postgresService.FetchById(ctx, tt.id)
+
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestFetchByIdWithContext(t *testing.T) {
+	postgresService := upPostgres("postgres-for-test-TestFetchByIdWithContext", t)
+
+	tests := []struct {
+		name    string
+		setup   func() context.Context
+		id      int
+		want    []*SMTPClient.EmailMessage
+		wantErr error
+	}{
+		{
+			name: "timeout exceeded for instant sending",
+			setup: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				time.Sleep(2 * time.Millisecond)
+
+				return ctx
+			},
+			id:      1,
+			want:    nil,
+			wantErr: context.DeadlineExceeded,
+		},
+		{
+			name: "context canceled for instant sending",
+			setup: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			},
+			id:      2,
+			want:    nil,
+			wantErr: context.Canceled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := tt.setup()
 
 			got, err := postgresService.FetchById(ctx, tt.id)
 
@@ -300,6 +406,54 @@ func TestFetchByEmail(t *testing.T) {
 	}
 }
 
+func TestFetchByEmailWithContext(t *testing.T) {
+	postgresService := upPostgres("postgres-for-test-TestFetchByEmailWithContext", t)
+
+	tests := []struct {
+		name    string
+		setup   func() context.Context
+		email   string
+		want    []*SMTPClient.EmailMessage
+		wantErr error
+	}{
+		{
+			name: "timeout exceeded for instant sending",
+			setup: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				time.Sleep(2 * time.Millisecond)
+
+				return ctx
+			},
+			email:   "somethingEmail",
+			want:    nil,
+			wantErr: context.DeadlineExceeded,
+		},
+		{
+			name: "context canceled for instant sending",
+			setup: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			},
+			email:   "somethingEmail",
+			want:    nil,
+			wantErr: context.Canceled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := tt.setup()
+
+			got, err := postgresService.FetchByEmail(ctx, tt.email)
+
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestFetchByAll(t *testing.T) {
 	ctx := context.Background()
 
@@ -364,6 +518,51 @@ func TestFetchByAll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup(tt.insertSQL)
+
+			got, err := postgresService.FetchByAll(ctx)
+
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestFetchByAllWithContext(t *testing.T) {
+	postgresService := upPostgres("postgres-for-test-TestFetchByAllWithContext", t)
+
+	tests := []struct {
+		name    string
+		setup   func() context.Context
+		want    []*SMTPClient.EmailMessage
+		wantErr error
+	}{
+		{
+			name: "timeout exceeded for instant sending",
+			setup: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				time.Sleep(2 * time.Millisecond)
+
+				return ctx
+			},
+			want:    nil,
+			wantErr: context.DeadlineExceeded,
+		},
+		{
+			name: "context canceled for instant sending",
+			setup: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			},
+			want:    nil,
+			wantErr: context.Canceled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := tt.setup()
 
 			got, err := postgresService.FetchByAll(ctx)
 

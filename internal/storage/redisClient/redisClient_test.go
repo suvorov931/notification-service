@@ -170,7 +170,7 @@ func TestCheckRedis(t *testing.T) {
 	}
 
 	t.Run("check removal after reading", func(t *testing.T) {
-		err := rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+		err = rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 			Score:  float64(time.Now().Unix()),
 			Member: "something",
 		}).Err()
