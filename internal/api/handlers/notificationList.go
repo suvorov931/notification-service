@@ -47,7 +47,7 @@ func (nh *NotificationHandler) NewListNotificationHandler(metrics monitoring.Mon
 func (nh *NotificationHandler) handleQuery(ctx context.Context, q url.Values) ([]*SMTPClient.EmailMessage, error) {
 	by := q.Get("by")
 
-	mail := q.Get("mail")
+	mail := q.Get("email")
 	id := q.Get("id")
 
 	switch by {
@@ -56,7 +56,7 @@ func (nh *NotificationHandler) handleQuery(ctx context.Context, q url.Values) ([
 
 		return nh.postgresClient.FetchById(ctx, intId)
 
-	case "mail":
+	case "email":
 		return nh.postgresClient.FetchByEmail(ctx, mail)
 
 	case "all":

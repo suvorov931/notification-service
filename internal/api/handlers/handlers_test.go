@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -329,13 +330,115 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 }
 
 func TestNewListNotificationHandler(t *testing.T) {
+	//testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
+	//require.NoError(t, err)
+
+	tests := []struct {
+		name                string
+		requestContext      context.Context
+		wantEmail           []*SMTPClient.EmailMessage
+		query               string
+		id                  int
+		wantError           error
+		wantStatusCode      int
+		wantResponseMessage string
+	}{
+		{
+			name:           "invalid query",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=invalid",
+			id:                  1,
+			wantError:           ErrInvalidQuery,
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: "invalid query\n",
+		},
+		{
+			name: "context timeout",
+			requestContext: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				time.Sleep(2 * time.Millisecond)
+
+				return ctx
+			}(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=all",
+			id:                  1,
+			wantError:           ErrInvalidQuery,
+			wantStatusCode:      http.StatusInternalServerError,
+			wantResponseMessage: http.StatusText(http.StatusInternalServerError) + "\n",
+		},
+		{
+			name: "context canceled during sending",
+			requestContext: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			}(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=all",
+			id:                  1,
+			wantError:           ErrInvalidQuery,
+			wantStatusCode:      http.StatusInternalServerError,
+			wantResponseMessage: http.StatusText(http.StatusInternalServerError) + "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", tt.query, nil).WithContext(tt.requestContext)
+			w := httptest.NewRecorder()
+			r.Header.Set("content-type", "application/json")
+
+			mockSender := &SMTPClient.MockEmailSender{}
+			mockRedisClient := &redisClient.MockRedisClient{}
+			mockPostgresClient := &postgresClient.MockPostgresService{}
+
+			notificationHandler := New(
+				zap.NewNop(),
+				mockSender,
+				mockRedisClient,
+				mockPostgresClient,
+			)
+
+			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.wantError)
+
+			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
+			handler.ServeHTTP(w, r)
+
+			assert.Equal(t, tt.wantStatusCode, w.Code)
+			assert.Equal(t, tt.wantResponseMessage, w.Body.String())
+		})
+	}
+}
+
+func TestNewListNotificationHandlerFetchById(t *testing.T) {
 	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
 	require.NoError(t, err)
 
 	tests := []struct {
 		name                string
 		requestContext      context.Context
-		email               []*SMTPClient.EmailMessage
+		wantEmail           []*SMTPClient.EmailMessage
 		query               string
 		id                  int
 		wantError           error
@@ -345,7 +448,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 		{
 			name:           "success for instantSending",
 			requestContext: context.Background(),
-			email: []*SMTPClient.EmailMessage{{
+			wantEmail: []*SMTPClient.EmailMessage{{
 				Type:    "instantSending",
 				Time:    nil,
 				To:      "to",
@@ -361,7 +464,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 		{
 			name:           "success for delayedSending",
 			requestContext: context.Background(),
-			email: []*SMTPClient.EmailMessage{{
+			wantEmail: []*SMTPClient.EmailMessage{{
 				Type:    "delayedSending",
 				Time:    &testTime,
 				To:      "to",
@@ -375,12 +478,23 @@ func TestNewListNotificationHandler(t *testing.T) {
 			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
 		{
-			name:                "invalid query",
+			name:                "id not found",
 			requestContext:      context.Background(),
-			query:               "/list?invalidQuery",
+			wantEmail:           nil,
+			query:               "/list?by=id&id=12",
+			id:                  12,
+			wantError:           pgx.ErrNoRows,
 			wantStatusCode:      http.StatusBadRequest,
-			wantResponseMessage: ErrInvalidQuery.Error() + "\n",
+			wantResponseMessage: "There are no results for the specified param\n\n",
 		},
+
+		//{
+		//	name:                "invalid query",
+		//	requestContext:      context.Background(),
+		//	query:               "/list?invalidQuery",
+		//	wantStatusCode:      http.StatusBadRequest,
+		//	wantResponseMessage: ErrInvalidQuery.Error() + "\n",
+		//},
 	}
 	// TODO: валидация query
 	for _, tt := range tests {
@@ -400,7 +514,226 @@ func TestNewListNotificationHandler(t *testing.T) {
 				mockPostgresClient,
 			)
 
-			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.email, tt.wantError)
+			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.wantError)
+
+			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
+			handler.ServeHTTP(w, r)
+
+			assert.Equal(t, tt.wantStatusCode, w.Code)
+			assert.Equal(t, tt.wantResponseMessage, w.Body.String())
+		})
+	}
+}
+
+func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name                string
+		requestContext      context.Context
+		wantEmail           []*SMTPClient.EmailMessage
+		query               string
+		email               string
+		wantError           error
+		wantStatusCode      int
+		wantResponseMessage string
+	}{
+		{
+			name:           "success for instantSending",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=email&email=to",
+			email:               "to",
+			wantError:           nil,
+			wantStatusCode:      http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"instantSending\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:           "success for delayedSending",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "delayedSending",
+				Time:    &testTime,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=email&email=to",
+			email:               "to",
+			wantError:           nil,
+			wantStatusCode:      http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:           "multiple",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{
+				{
+					Type:    "delayedSending",
+					Time:    &testTime,
+					To:      "common",
+					Subject: "subject",
+					Message: "message",
+				},
+				{
+					Type:    "instantSending",
+					Time:    nil,
+					To:      "common",
+					Subject: "subject",
+					Message: "message",
+				},
+			},
+			query:          "/list?by=email&email=common",
+			email:          "common",
+			wantError:      nil,
+			wantStatusCode: http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}," +
+				"{\"type\":\"instantSending\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:                "email not found",
+			requestContext:      context.Background(),
+			wantEmail:           nil,
+			query:               "/list?by=email&email=notExists",
+			email:               "notExists",
+			wantError:           pgx.ErrNoRows,
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: "There are no results for the specified param\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", tt.query, nil).WithContext(tt.requestContext)
+			w := httptest.NewRecorder()
+			r.Header.Set("content-type", "application/json")
+
+			mockSender := &SMTPClient.MockEmailSender{}
+			mockRedisClient := &redisClient.MockRedisClient{}
+			mockPostgresClient := &postgresClient.MockPostgresService{}
+
+			notificationHandler := New(
+				zap.NewNop(),
+				mockSender,
+				mockRedisClient,
+				mockPostgresClient,
+			)
+
+			mockPostgresClient.On("FetchByEmail", mock.Anything, tt.email).Return(tt.wantEmail, tt.wantError)
+
+			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
+			handler.ServeHTTP(w, r)
+
+			assert.Equal(t, tt.wantStatusCode, w.Code)
+			assert.Equal(t, tt.wantResponseMessage, w.Body.String())
+		})
+	}
+}
+
+func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
+	testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name                string
+		requestContext      context.Context
+		wantEmail           []*SMTPClient.EmailMessage
+		query               string
+		wantError           error
+		wantStatusCode      int
+		wantResponseMessage string
+	}{
+		{
+			name:           "success for instantSending",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=all",
+			wantError:           nil,
+			wantStatusCode:      http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"instantSending\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:           "success for delayedSending",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "delayedSending",
+				Time:    &testTime,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=all",
+			wantError:           nil,
+			wantStatusCode:      http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:           "multiple",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{
+				{
+					Type:    "delayedSending",
+					Time:    &testTime,
+					To:      "common",
+					Subject: "subject",
+					Message: "message",
+				},
+				{
+					Type:    "instantSending",
+					Time:    nil,
+					To:      "common",
+					Subject: "subject",
+					Message: "message",
+				},
+			},
+			query:          "/list?by=all",
+			wantError:      nil,
+			wantStatusCode: http.StatusOK,
+			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}," +
+				"{\"type\":\"instantSending\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
+		},
+		{
+			name:                "email not found",
+			requestContext:      context.Background(),
+			wantEmail:           nil,
+			query:               "/list?by=all",
+			wantError:           pgx.ErrNoRows,
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: "There are no results for the specified param\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", tt.query, nil).WithContext(tt.requestContext)
+			w := httptest.NewRecorder()
+			r.Header.Set("content-type", "application/json")
+
+			mockSender := &SMTPClient.MockEmailSender{}
+			mockRedisClient := &redisClient.MockRedisClient{}
+			mockPostgresClient := &postgresClient.MockPostgresService{}
+
+			notificationHandler := New(
+				zap.NewNop(),
+				mockSender,
+				mockRedisClient,
+				mockPostgresClient,
+			)
+
+			mockPostgresClient.On("FetchByAll", mock.Anything).Return(tt.wantEmail, tt.wantError)
 
 			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)

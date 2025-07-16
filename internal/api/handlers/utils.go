@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -13,11 +14,20 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
+// TODO: timeouts
+
 type NotificationHandler struct {
 	logger         *zap.Logger
 	sender         SMTPClient.EmailSender
 	redisClient    redisClient.RedisClient
 	postgresClient postgresClient.PostgresClient
+	//timeouts       handlersTimeouts
+}
+
+type handlersTimeouts struct {
+	timeoutForSend        time.Duration
+	timeoutForSendViaTime time.Duration
+	timeoutForList        time.Duration
 }
 
 func New(logger *zap.Logger, sender SMTPClient.EmailSender,
@@ -28,6 +38,10 @@ func New(logger *zap.Logger, sender SMTPClient.EmailSender,
 		redisClient:    redisClient,
 		postgresClient: postgresClient,
 	}
+}
+
+func (nh *NotificationHandler) setTimeout(ctx context.Context) {
+
 }
 
 func (nh *NotificationHandler) checkCtxCanceled(ctx context.Context, w http.ResponseWriter, metrics monitoring.Monitoring,
