@@ -84,7 +84,7 @@ func main() {
 		}
 	}()
 
-	router := initRouter(logger, &config.Logger, smtpClient, redisClient, postgresClient, appMetrics)
+	router := initRouter(logger, &config.Logger, smtpClient, redisClient, postgresClient, appMetrics, config.AppTimeouts)
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port),
@@ -101,6 +101,28 @@ func main() {
 	<-ctx.Done()
 
 	gracefulShutdown(logger, &srv, postgresClient, redisClient)
+}
+
+func initRouter(logger *zap.Logger, loggerConfig *llogger.Config, smtpClient *SMTPClient.SMTPClient, redisClient *rredisClient.RedisCluster,
+	postgresClient *ppostgresClient.PostgresService, appMetrics *monitoring.AppMetrics, timeouts cconfig.AppTimeouts) *chi.Mux {
+
+	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RealIP)
+	router.Use(llogger.MiddlewareLogger(logger, loggerConfig))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+	notificationHandler := handlers.New(logger, smtpClient, redisClient, postgresClient, timeouts)
+
+	router.Post("/send-notification", notificationHandler.NewSendNotificationHandler(appMetrics.SendNotificationMetrics))
+
+	router.Post("/send-notification-via-time", notificationHandler.NewSendNotificationViaTimeHandler(appMetrics.SendNotificationViaTimeMetrics))
+
+	router.Get("/list", notificationHandler.NewListNotificationHandler(appMetrics.ListNotificationMetrics))
+
+	return router
 }
 
 func gracefulShutdown(logger *zap.Logger, srv *http.Server,
@@ -126,27 +148,6 @@ func gracefulShutdown(logger *zap.Logger, srv *http.Server,
 	logger.Info("stopping http server", zap.String("addr", srv.Addr))
 
 	logger.Info("application shutdown completed successfully")
-}
-
-func initRouter(logger *zap.Logger, loggerConfig *llogger.Config, smtpClient *SMTPClient.SMTPClient,
-	redisClient *rredisClient.RedisCluster, postgresClient *ppostgresClient.PostgresService, appMetrics *monitoring.AppMetrics) *chi.Mux {
-	router := chi.NewRouter()
-
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(llogger.MiddlewareLogger(logger, loggerConfig))
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.URLFormat)
-
-	notificationHandler := handlers.New(logger, smtpClient, redisClient, postgresClient)
-
-	router.Post("/send-notification", notificationHandler.NewSendNotificationHandler(appMetrics.SendNotificationMetrics))
-
-	router.Post("/send-notification-via-time", notificationHandler.NewSendNotificationViaTimeHandler(appMetrics.SendNotificationViaTimeMetrics))
-
-	router.Get("/list", notificationHandler.NewListNotificationHandler(appMetrics.ListNotificationMetrics))
-
-	return router
 }
 
 // TODO: механизм отказоустойчивости (постоянное переподключение к редису и тд)

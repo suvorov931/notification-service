@@ -10,14 +10,19 @@ import (
 	"notification/internal/monitoring"
 )
 
+const (
+	DefaultMaxRetries      = 3
+	DefaultBasicRetryPause = 5 * time.Second
+)
+
 type Config struct {
-	SenderEmail     string `yaml:"SENDER_EMAIL" env:"SENDER_EMAIL"`
-	SenderPassword  string `yaml:"SENDER_PASSWORD" env:"SENDER_PASSWORD"`
-	SMTPHost        string `yaml:"SMTP_HOST" env:"SMTP_HOST"`
-	SMTPPort        int    `yaml:"SMTP_PORT" env:"SMTP_PORT"`
-	SkipVerify      bool   `yaml:"SKIP_VERIFY" env:"SKIP_VERIFY"`
-	MaxRetries      int    `yaml:"MAX_RETRIES" env:"MAX_RETRIES"`
-	BasicRetryPause int    `yaml:"BASIC_RETRY_PAUSE" env:"BASIC_RETRY_PAUSE"`
+	SenderEmail     string        `env:"SENDER_EMAIL"`
+	SenderPassword  string        `env:"SENDER_PASSWORD"`
+	SMTPHost        string        `env:"SMTP_HOST"`
+	SMTPPort        int           `env:"SMTP_PORT"`
+	SkipVerify      bool          `env:"SKIP_VERIFY"`
+	MaxRetries      int           `env:"MAX_RETRIES"`
+	BasicRetryPause time.Duration `env:"BASIC_RETRY_PAUSE"`
 }
 
 type TempEmailMessage struct {

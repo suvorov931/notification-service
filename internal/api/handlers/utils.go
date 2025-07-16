@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"go.uber.org/zap"
 
 	"notification/internal/SMTPClient"
+	"notification/internal/config"
 	"notification/internal/monitoring"
 	"notification/internal/storage/postgresClient"
 	"notification/internal/storage/redisClient"
@@ -21,22 +21,17 @@ type NotificationHandler struct {
 	sender         SMTPClient.EmailSender
 	redisClient    redisClient.RedisClient
 	postgresClient postgresClient.PostgresClient
-	//timeouts       handlersTimeouts
+	timeouts       config.AppTimeouts
 }
 
-type handlersTimeouts struct {
-	timeoutForSend        time.Duration
-	timeoutForSendViaTime time.Duration
-	timeoutForList        time.Duration
-}
-
-func New(logger *zap.Logger, sender SMTPClient.EmailSender,
-	redisClient redisClient.RedisClient, postgresClient postgresClient.PostgresClient) *NotificationHandler {
+func New(logger *zap.Logger, sender SMTPClient.EmailSender, redisClient redisClient.RedisClient,
+	postgresClient postgresClient.PostgresClient, timeouts config.AppTimeouts) *NotificationHandler {
 	return &NotificationHandler{
 		logger:         logger,
 		sender:         sender,
 		redisClient:    redisClient,
 		postgresClient: postgresClient,
+		timeouts:       timeouts,
 	}
 }
 

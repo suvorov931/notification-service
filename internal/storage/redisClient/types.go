@@ -14,7 +14,6 @@ import (
 
 const (
 	DefaultRedisTimeout = 3 * time.Second
-	emailTimeLayout     = "2006-01-02 15:04:05"
 )
 
 type Config struct {

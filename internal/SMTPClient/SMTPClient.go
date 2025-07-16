@@ -15,6 +15,14 @@ import (
 )
 
 func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMTPClient {
+	if config.MaxRetries == 0 {
+		config.MaxRetries = DefaultMaxRetries
+	}
+
+	if config.BasicRetryPause == 0 {
+		config.BasicRetryPause = DefaultBasicRetryPause
+	}
+
 	return &SMTPClient{
 		config:  config,
 		metrics: metrics,
@@ -84,6 +92,7 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 		}
 
 		if i > 0 {
+			// TODO: вынести в отдельную функцию
 			pause := time.Duration(float64(s.config.BasicRetryPause)*math.Pow(2, float64(i-1))) * time.Second
 			s.logger.Info(
 				"sendWithRetry: retrying send message",
@@ -111,3 +120,8 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 	s.logger.Error("sendWithRetry: all attempts to send message failed, last error:", zap.Error(lastErr))
 	return fmt.Errorf("sendWithRetry: all attempts to send message failed, last error: %w", lastErr)
 }
+
+//func CreatePause() time.Duration {
+//	pause := time.Duration(float64(s.config.BasicRetryPause)*math.Pow(2, float64(i-1))) * time.Second
+//	return pause
+//}
