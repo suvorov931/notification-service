@@ -34,6 +34,7 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
 		s.metrics.IncCanceled("SendEmail")
 		s.logger.Error("SendEmail: context canceled before sending", zap.Error(ctx.Err()))
+
 		return fmt.Errorf("SendEmail: context canceled before sending")
 	}
 
@@ -45,6 +46,7 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if err != nil {
 		s.metrics.IncError("SendEmail")
 		s.logger.Error("SendEmail: no valid sender address", zap.Error(err))
+
 		return fmt.Errorf("SendEmail: no valid sender address")
 	}
 
@@ -70,6 +72,7 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if err = s.sendWithRetry(ctx, dialer, msg); err != nil {
 		s.metrics.IncError("SendEmail")
 		s.logger.Error(fmt.Sprintf("SendEmail: cannot send message to %s", email.To), zap.Error(err))
+
 		return fmt.Errorf("SendEmail: cannot send message to %s, %w", email.To, err)
 	}
 
@@ -88,23 +91,25 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 		if ctx.Err() != nil {
 			s.metrics.IncCanceled("SendEmail")
 			s.logger.Error("sendWithRetry: context canceled before retry", zap.Error(ctx.Err()))
+
 			return fmt.Errorf("sendWithRetry: context canceled before retry")
 		}
 
 		if i > 0 {
-			// TODO: вынести в отдельную функцию
-			pause := time.Duration(float64(s.config.BasicRetryPause)*math.Pow(2, float64(i-1))) * time.Second
+			pause := s.CreatePause(i)
 			s.logger.Info(
 				"sendWithRetry: retrying send message",
 				zap.Int("attempt", i),
 				zap.Duration("pause", pause),
 				zap.Error(lastErr),
 			)
+
 			select {
 			case <-time.After(pause):
 			case <-ctx.Done():
 				s.metrics.IncCanceled("SendEmail")
 				s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
+
 				return fmt.Errorf("sendWithRetry: context canceled")
 			}
 		}
@@ -121,7 +126,8 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 	return fmt.Errorf("sendWithRetry: all attempts to send message failed, last error: %w", lastErr)
 }
 
-//func CreatePause() time.Duration {
-//	pause := time.Duration(float64(s.config.BasicRetryPause)*math.Pow(2, float64(i-1))) * time.Second
-//	return pause
-//}
+func (s *SMTPClient) CreatePause(i int) time.Duration {
+	pauseFloat := s.config.BasicRetryPause.Seconds() * math.Pow(2, float64(i-1))
+	pause := time.Duration(pauseFloat) * time.Second
+	return pause
+}

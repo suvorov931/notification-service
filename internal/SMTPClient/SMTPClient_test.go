@@ -103,6 +103,49 @@ func TestSendEmail(t *testing.T) {
 	}
 }
 
+func TestCreatePause(t *testing.T) {
+	srv := New(&Config{BasicRetryPause: 3 * time.Second}, nil, nil)
+
+	tests := []struct {
+		name       string
+		i          int
+		basicPause time.Duration
+		want       time.Duration
+	}{
+		{
+			name:       "i = 1",
+			i:          1,
+			basicPause: 3 * time.Second,
+			want:       3 * time.Second,
+		},
+		{
+			name:       "i = 2",
+			i:          2,
+			basicPause: 3 * time.Second,
+			want:       6 * time.Second,
+		},
+		{
+			name:       "i = 3",
+			i:          3,
+			basicPause: 3 * time.Second,
+			want:       12 * time.Second,
+		},
+		{
+			name:       "i = 4",
+			i:          4,
+			basicPause: 3 * time.Second,
+			want:       24 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := srv.CreatePause(tt.i)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 type mailHogResponse struct {
 	Total int `json:"total"`
 	Items []struct {

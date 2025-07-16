@@ -7,11 +7,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"notification/internal/SMTPClient"
+	"notification/internal/storage/postgresClient"
+	"notification/internal/storage/redisClient"
 )
 
 func TestNew(t *testing.T) {
 	tempDir := t.TempDir()
 	tempFile := tempDir + "/config.env"
+
+	err := os.WriteFile(tempFile, []byte("SOMETHING=SOMETHING"), 0644)
+	require.NoError(t, err)
+
+	cfg, err := New(tempFile)
+	require.NoError(t, err)
+
+	assert.Equal(t, SMTPClient.DefaultBasicRetryPause, cfg.AppTimeouts.SMTPPauseForRetries)
+	assert.Equal(t, SMTPClient.DefaultMaxRetries, cfg.AppTimeouts.SMTPQuantityOfRetries)
+	assert.Equal(t, redisClient.DefaultRedisTimeout, cfg.AppTimeouts.RedisTimeout)
+	assert.Equal(t, postgresClient.DefaultPostgresTimeout, cfg.AppTimeouts.PostgresTimeout)
 
 	content := `
 	HTTP_HOST=localhost
@@ -43,10 +58,10 @@ func TestNew(t *testing.T) {
 	LOGGER=dev
 	`
 
-	err := os.WriteFile(tempFile, []byte(content), 0644)
+	err = os.WriteFile(tempFile, []byte(content), 0644)
 	require.NoError(t, err)
 
-	cfg, err := New(tempFile)
+	cfg, err = New(tempFile)
 	require.NoError(t, err)
 
 	assert.Equal(t, "localhost", cfg.HttpServer.Host)

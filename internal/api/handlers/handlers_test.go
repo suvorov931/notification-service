@@ -17,6 +17,7 @@ import (
 
 	"notification/internal/SMTPClient"
 	"notification/internal/api"
+	"notification/internal/config"
 	"notification/internal/monitoring"
 	"notification/internal/storage/postgresClient"
 	"notification/internal/storage/redisClient"
@@ -104,7 +105,23 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			wantResponseMessage: http.StatusText(500) + "\n",
 		},
 		{
-			name:           "context canceled during sending",
+			name: "context canceled before processing",
+			requestContext: func() context.Context {
+				canceledCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return canceledCtx
+			}(),
+			body: `{
+				"to": "example@gmail.com",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			senderError:         nil,
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: http.StatusText(400) + "\n",
+		},
+		{
+			name:           "context canceled after processing",
 			requestContext: context.Background(),
 			body: `{
 				"to": "example@gmail.com",
@@ -123,10 +140,10 @@ func TestNewSendNotificationHandler(t *testing.T) {
 			wantResponseMessage: http.StatusText(500) + "\n",
 		},
 		{
-			name: "context canceled before sending",
+			name: "context timeout before processing",
 			requestContext: func() context.Context {
-				canceledCtx, cancel := context.WithCancel(context.Background())
-				cancel()
+				canceledCtx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				time.Sleep(2 * time.Nanosecond)
 				return canceledCtx
 			}(),
 			body: `{
@@ -134,7 +151,33 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				"subject": "Subject",
 				"message": "Message"
 			}`,
+			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				Time:    nil,
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
+			},
 			senderError:         nil,
+			wantStatusCode:      http.StatusInternalServerError,
+			wantResponseMessage: http.StatusText(500) + "\n",
+		},
+		{
+			name:           "context timeout during processing",
+			requestContext: context.Background(),
+			body: `{
+				"to": "example@gmail.com",
+				"subject": "Subject",
+				"message": "Message"
+			}`,
+			email: SMTPClient.EmailMessage{
+				Type:    api.KeyForInstantSending,
+				Time:    nil,
+				To:      "example@gmail.com",
+				Subject: "Subject",
+				Message: "Message",
+			},
+			senderError:         context.DeadlineExceeded,
 			wantStatusCode:      http.StatusInternalServerError,
 			wantResponseMessage: http.StatusText(500) + "\n",
 		},
@@ -155,13 +198,11 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				mockSender,
 				mockRedisClient,
 				mockPostgresClient,
+				config.AppTimeouts{},
 			)
 
-			if tt.body != "" {
-				mockSender.On("SendEmail", mock.Anything, tt.email).Return(tt.senderError)
-				mockPostgresClient.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
-
-			}
+			mockSender.On("SendEmail", mock.Anything, tt.email).Return(tt.senderError)
+			mockPostgresClient.On("SaveEmail", mock.Anything, &tt.email).Return(tt.id, tt.postgresError)
 
 			handler := notificationHandler.NewSendNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)
@@ -293,8 +334,8 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				"message": "Message"
 			}`,
 			redisError:          nil,
-			wantStatusCode:      http.StatusInternalServerError,
-			wantResponseMessage: http.StatusText(500) + "\n",
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: http.StatusText(400) + "\n",
 		},
 	}
 
@@ -313,6 +354,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				mockSender,
 				mockRedisClient,
 				mockPostgresClient,
+				config.AppTimeouts{},
 			)
 
 			if tt.body != "" {
@@ -330,16 +372,13 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 }
 
 func TestNewListNotificationHandler(t *testing.T) {
-	//testTime, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-05-24 00:33:10", time.UTC)
-	//require.NoError(t, err)
-
 	tests := []struct {
 		name                string
 		requestContext      context.Context
 		wantEmail           []*SMTPClient.EmailMessage
 		query               string
 		id                  int
-		wantError           error
+		postgresError       error
 		wantStatusCode      int
 		wantResponseMessage string
 	}{
@@ -355,18 +394,13 @@ func TestNewListNotificationHandler(t *testing.T) {
 			}},
 			query:               "/list?by=invalid",
 			id:                  1,
-			wantError:           ErrInvalidQuery,
+			postgresError:       ErrInvalidQuery,
 			wantStatusCode:      http.StatusBadRequest,
 			wantResponseMessage: "invalid query\n",
 		},
 		{
-			name: "context timeout",
-			requestContext: func() context.Context {
-				ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
-				time.Sleep(2 * time.Millisecond)
-
-				return ctx
-			}(),
+			name:           "timeout before fetching",
+			requestContext: context.Background(),
 			wantEmail: []*SMTPClient.EmailMessage{{
 				Type:    "instantSending",
 				Time:    nil,
@@ -374,14 +408,14 @@ func TestNewListNotificationHandler(t *testing.T) {
 				Subject: "subject",
 				Message: "message",
 			}},
-			query:               "/list?by=all",
+			query:               "/list?by=id&id=1",
 			id:                  1,
-			wantError:           ErrInvalidQuery,
+			postgresError:       context.DeadlineExceeded,
 			wantStatusCode:      http.StatusInternalServerError,
 			wantResponseMessage: http.StatusText(http.StatusInternalServerError) + "\n",
 		},
 		{
-			name: "context canceled during sending",
+			name: "timeout after fetching",
 			requestContext: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -395,11 +429,64 @@ func TestNewListNotificationHandler(t *testing.T) {
 				Subject: "subject",
 				Message: "message",
 			}},
-			query:               "/list?by=all",
+			query:               "/list?by=id&id=1",
 			id:                  1,
-			wantError:           ErrInvalidQuery,
+			postgresError:       context.DeadlineExceeded,
 			wantStatusCode:      http.StatusInternalServerError,
 			wantResponseMessage: http.StatusText(http.StatusInternalServerError) + "\n",
+		},
+		{
+			name: "context canceled before fetching",
+			requestContext: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			}(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=id&id=1",
+			id:                  1,
+			postgresError:       nil,
+			wantStatusCode:      http.StatusInternalServerError,
+			wantResponseMessage: http.StatusText(http.StatusInternalServerError) + "\n",
+		},
+		{
+			name:           "context after before fetching",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=id&id=1",
+			id:                  1,
+			postgresError:       context.Canceled,
+			wantStatusCode:      http.StatusBadRequest,
+			wantResponseMessage: http.StatusText(http.StatusBadRequest) + "\n",
+		},
+		{
+			name:           "something went wrong",
+			requestContext: context.Background(),
+			wantEmail: []*SMTPClient.EmailMessage{{
+				Type:    "instantSending",
+				Time:    nil,
+				To:      "to",
+				Subject: "subject",
+				Message: "message",
+			}},
+			query:               "/list?by=id&id=1",
+			id:                  1,
+			postgresError:       fmt.Errorf("something went wrong"),
+			wantStatusCode:      http.StatusInternalServerError,
+			wantResponseMessage: http.StatusText(500) + "\n",
 		},
 	}
 
@@ -418,13 +505,15 @@ func TestNewListNotificationHandler(t *testing.T) {
 				mockSender,
 				mockRedisClient,
 				mockPostgresClient,
+				config.AppTimeouts{},
 			)
 
-			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.wantError)
+			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.postgresError)
 
 			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)
 
+			//assert.ErrorIs(t, err)
 			assert.Equal(t, tt.wantStatusCode, w.Code)
 			assert.Equal(t, tt.wantResponseMessage, w.Body.String())
 		})
@@ -441,7 +530,7 @@ func TestNewListNotificationHandlerFetchById(t *testing.T) {
 		wantEmail           []*SMTPClient.EmailMessage
 		query               string
 		id                  int
-		wantError           error
+		postgresError       error
 		wantStatusCode      int
 		wantResponseMessage string
 	}{
@@ -457,7 +546,7 @@ func TestNewListNotificationHandlerFetchById(t *testing.T) {
 			}},
 			query:               "/list?by=id&id=1",
 			id:                  1,
-			wantError:           nil,
+			postgresError:       nil,
 			wantStatusCode:      http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"instantSending\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
@@ -473,7 +562,7 @@ func TestNewListNotificationHandlerFetchById(t *testing.T) {
 			}},
 			query:               "/list?by=id&id=2",
 			id:                  2,
-			wantError:           nil,
+			postgresError:       nil,
 			wantStatusCode:      http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
@@ -483,20 +572,12 @@ func TestNewListNotificationHandlerFetchById(t *testing.T) {
 			wantEmail:           nil,
 			query:               "/list?by=id&id=12",
 			id:                  12,
-			wantError:           pgx.ErrNoRows,
+			postgresError:       pgx.ErrNoRows,
 			wantStatusCode:      http.StatusBadRequest,
 			wantResponseMessage: "There are no results for the specified param\n\n",
 		},
-
-		//{
-		//	name:                "invalid query",
-		//	requestContext:      context.Background(),
-		//	query:               "/list?invalidQuery",
-		//	wantStatusCode:      http.StatusBadRequest,
-		//	wantResponseMessage: ErrInvalidQuery.Error() + "\n",
-		//},
 	}
-	// TODO: валидация query
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := httptest.NewRequest("GET", tt.query, nil).WithContext(tt.requestContext)
@@ -512,9 +593,10 @@ func TestNewListNotificationHandlerFetchById(t *testing.T) {
 				mockSender,
 				mockRedisClient,
 				mockPostgresClient,
+				config.AppTimeouts{},
 			)
 
-			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.wantError)
+			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.postgresError)
 
 			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)
@@ -535,7 +617,7 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 		wantEmail           []*SMTPClient.EmailMessage
 		query               string
 		email               string
-		wantError           error
+		postgresError       error
 		wantStatusCode      int
 		wantResponseMessage string
 	}{
@@ -551,7 +633,7 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 			}},
 			query:               "/list?by=email&email=to",
 			email:               "to",
-			wantError:           nil,
+			postgresError:       nil,
 			wantStatusCode:      http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"instantSending\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
@@ -567,7 +649,7 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 			}},
 			query:               "/list?by=email&email=to",
 			email:               "to",
-			wantError:           nil,
+			postgresError:       nil,
 			wantStatusCode:      http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
@@ -592,7 +674,7 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 			},
 			query:          "/list?by=email&email=common",
 			email:          "common",
-			wantError:      nil,
+			postgresError:  nil,
 			wantStatusCode: http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}," +
 				"{\"type\":\"instantSending\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
@@ -603,7 +685,7 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 			wantEmail:           nil,
 			query:               "/list?by=email&email=notExists",
 			email:               "notExists",
-			wantError:           pgx.ErrNoRows,
+			postgresError:       pgx.ErrNoRows,
 			wantStatusCode:      http.StatusBadRequest,
 			wantResponseMessage: "There are no results for the specified param\n\n",
 		},
@@ -624,9 +706,10 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 				mockSender,
 				mockRedisClient,
 				mockPostgresClient,
+				config.AppTimeouts{},
 			)
 
-			mockPostgresClient.On("FetchByEmail", mock.Anything, tt.email).Return(tt.wantEmail, tt.wantError)
+			mockPostgresClient.On("FetchByEmail", mock.Anything, tt.email).Return(tt.wantEmail, tt.postgresError)
 
 			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)
@@ -646,7 +729,7 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 		requestContext      context.Context
 		wantEmail           []*SMTPClient.EmailMessage
 		query               string
-		wantError           error
+		postgresError       error
 		wantStatusCode      int
 		wantResponseMessage string
 	}{
@@ -661,7 +744,7 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 				Message: "message",
 			}},
 			query:               "/list?by=all",
-			wantError:           nil,
+			postgresError:       nil,
 			wantStatusCode:      http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"instantSending\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
@@ -676,7 +759,7 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 				Message: "message",
 			}},
 			query:               "/list?by=all",
-			wantError:           nil,
+			postgresError:       nil,
 			wantStatusCode:      http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"to\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
 		},
@@ -700,7 +783,7 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 				},
 			},
 			query:          "/list?by=all",
-			wantError:      nil,
+			postgresError:  nil,
 			wantStatusCode: http.StatusOK,
 			wantResponseMessage: "[{\"type\":\"delayedSending\",\"time\":\"2035-05-24T00:33:10Z\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}," +
 				"{\"type\":\"instantSending\",\"to\":\"common\",\"subject\":\"subject\",\"message\":\"message\"}]\n",
@@ -710,7 +793,7 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 			requestContext:      context.Background(),
 			wantEmail:           nil,
 			query:               "/list?by=all",
-			wantError:           pgx.ErrNoRows,
+			postgresError:       pgx.ErrNoRows,
 			wantStatusCode:      http.StatusBadRequest,
 			wantResponseMessage: "There are no results for the specified param\n\n",
 		},
@@ -731,9 +814,10 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 				mockSender,
 				mockRedisClient,
 				mockPostgresClient,
+				config.AppTimeouts{},
 			)
 
-			mockPostgresClient.On("FetchByAll", mock.Anything).Return(tt.wantEmail, tt.wantError)
+			mockPostgresClient.On("FetchByAll", mock.Anything).Return(tt.wantEmail, tt.postgresError)
 
 			handler := notificationHandler.NewListNotificationHandler(monitoring.NewNop())
 			handler.ServeHTTP(w, r)

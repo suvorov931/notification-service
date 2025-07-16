@@ -20,12 +20,14 @@ var ErrInvalidQuery = errors.New("invalid query")
 
 func (nh *NotificationHandler) NewListNotificationHandler(metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(r.Context(), nh.calculateTimeoutForList())
+		defer cancel()
+
 		start := time.Now()
 
 		handlerName := "ListNotification"
 
-		if nh.checkCtxCanceled(ctx, w, metrics, handlerName) {
+		if nh.checkCtxError(ctx, w, metrics, handlerName) {
 			return
 		}
 
@@ -81,19 +83,23 @@ func (nh *NotificationHandler) processError(ctx context.Context, err error, hand
 	metrics monitoring.Monitoring, w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, context.Canceled):
+		http.Error(w, http.StatusText(400), http.StatusBadRequest)
 		metrics.IncCanceled(handlerName)
 		nh.logger.Info("NewListNotificationHandler: Context canceled after handleQuery", zap.Error(ctx.Err()))
+
 		return
 
 	case errors.Is(err, context.DeadlineExceeded):
 		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 		metrics.IncTimeout(handlerName)
 		nh.logger.Info("NewListNotificationHandler: Context deadline exceeded", zap.Error(ctx.Err()))
+
 		return
 
 	case errors.Is(err, pgx.ErrNoRows):
 		http.Error(w, "There are no results for the specified param\n", http.StatusBadRequest)
 		nh.logger.Warn("NewListNotificationHandler: no rows found", zap.Error(err), zap.String("query", r.URL.RawQuery))
+
 		return
 
 	case errors.Is(err, ErrInvalidQuery):
@@ -104,6 +110,7 @@ func (nh *NotificationHandler) processError(ctx context.Context, err error, hand
 		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 		metrics.IncError(handlerName)
 		nh.logger.Error("NewListNotificationHandler: cannot get email from postgres", zap.Error(err))
+
 		return
 	}
 }

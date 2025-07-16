@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -311,8 +313,21 @@ func upRedisCluster(ctx context.Context, containerName string, num int, t *testi
 
 			_, _, err := cont.Exec(ctx, cmd)
 			require.NoError(t, err)
-		}
 
+			time.Sleep(time.Second)
+
+			_, r, err := cont.Exec(ctx, []string{
+				"redis-cli", "-p", port, "cluster", "info",
+			})
+			require.NoError(t, err)
+
+			b, err := io.ReadAll(r)
+			require.NoError(t, err)
+
+			if !strings.Contains(string(b), "cluster_state:ok") {
+				t.Fatalf("Cluster not ready, output:\n%s", string(b))
+			}
+		}
 	}
 
 	return addrs

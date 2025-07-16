@@ -43,6 +43,7 @@ type EmailMessage struct {
 
 type EmailSender interface {
 	SendEmail(context.Context, EmailMessage) error
+	CreatePause(int) time.Duration
 }
 
 type SMTPClient struct {
@@ -58,4 +59,10 @@ type MockEmailSender struct {
 func (m *MockEmailSender) SendEmail(ctx context.Context, email EmailMessage) error {
 	args := m.Called(ctx, email)
 	return args.Error(0)
+}
+
+func (m *MockEmailSender) CreatePause(i int) time.Duration {
+	//args := m.Called(i)
+	//return args.Get(0).(time.Duration)
+	return time.Second
 }

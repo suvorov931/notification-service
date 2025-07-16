@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -14,7 +16,7 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
-// TODO: timeouts
+const extraTimeForTimeout = 3 * time.Second
 
 type NotificationHandler struct {
 	logger         *zap.Logger
@@ -35,20 +37,49 @@ func New(logger *zap.Logger, sender SMTPClient.EmailSender, redisClient redisCli
 	}
 }
 
-func (nh *NotificationHandler) setTimeout(ctx context.Context) {
+func (nh *NotificationHandler) calculateTimeoutForSend() time.Duration {
+	var smtpAllTimeout time.Duration
 
-}
-
-func (nh *NotificationHandler) checkCtxCanceled(ctx context.Context, w http.ResponseWriter, metrics monitoring.Monitoring,
-	handlerName string) bool {
-	if ctx.Err() != nil {
-		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-		metrics.IncCanceled(handlerName)
-		nh.logger.Error(handlerName+": Context canceled before processing started", zap.Error(ctx.Err()))
-		return true
+	for i := 0; i < nh.timeouts.SMTPQuantityOfRetries+1; i++ {
+		smtpAllTimeout += nh.sender.CreatePause(i)
 	}
 
-	return false
+	allTimeout := smtpAllTimeout + nh.timeouts.PostgresTimeout + extraTimeForTimeout
+
+	return allTimeout
+}
+
+func (nh *NotificationHandler) calculateTimeoutForSendViaTime() time.Duration {
+	allTimeout := nh.timeouts.RedisTimeout + nh.timeouts.PostgresTimeout + extraTimeForTimeout
+	return allTimeout
+}
+
+func (nh *NotificationHandler) calculateTimeoutForList() time.Duration {
+	allTimeout := nh.timeouts.PostgresTimeout + extraTimeForTimeout
+	return allTimeout
+}
+
+func (nh *NotificationHandler) checkCtxError(ctx context.Context, w http.ResponseWriter,
+	metrics monitoring.Monitoring, handlerName string) bool {
+
+	switch {
+	case errors.Is(ctx.Err(), context.Canceled):
+		http.Error(w, http.StatusText(400), http.StatusBadRequest)
+		metrics.IncCanceled(handlerName)
+		nh.logger.Error(handlerName+": Context canceled before processing started", zap.Error(ctx.Err()))
+
+		return true
+
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+		metrics.IncCanceled(handlerName)
+		nh.logger.Error(handlerName+": Context deadline before processing started", zap.Error(ctx.Err()))
+
+		return true
+
+	default:
+		return false
+	}
 }
 
 type respMessage struct {
@@ -56,8 +87,7 @@ type respMessage struct {
 	Id      int    `json:"id,omitempty"`
 }
 
-func (nh *NotificationHandler) writeResponseWithId(w http.ResponseWriter, id int, message string, metrics monitoring.Monitoring,
-	handlerName string) {
+func (nh *NotificationHandler) writeResponseWithId(w http.ResponseWriter, id int, message string, metrics monitoring.Monitoring, handlerName string) {
 	resp := respMessage{
 		Message: message,
 		Id:      id,
@@ -68,6 +98,6 @@ func (nh *NotificationHandler) writeResponseWithId(w http.ResponseWriter, id int
 	err := json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		metrics.IncError(handlerName)
-		nh.logger.Error("NewSendNotificationViaTimeHandler: Cannot send report to caller", zap.Error(err))
+		nh.logger.Error(handlerName+": Cannot send report to caller", zap.Error(err))
 	}
 }

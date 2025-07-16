@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -13,12 +14,14 @@ import (
 
 func (nh *NotificationHandler) NewSendNotificationViaTimeHandler(metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(r.Context(), nh.calculateTimeoutForSendViaTime())
+		defer cancel()
+
 		start := time.Now()
 
 		handlerName := "SendNotificationViaTime"
 
-		if nh.checkCtxCanceled(ctx, w, metrics, handlerName) {
+		if nh.checkCtxError(ctx, w, metrics, handlerName) {
 			return
 		}
 
