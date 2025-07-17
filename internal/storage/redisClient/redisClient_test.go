@@ -3,9 +3,10 @@ package redisClient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,46 +26,79 @@ import (
 )
 
 func TestAddDelayedEmail(t *testing.T) {
-	ctx := context.Background()
+	timeForSuccessAdd, _ := time.ParseInLocation("2006-01-02 15:04:05", "2025-12-02 15:04:05", time.UTC)
 
-	addrs := upRedisCluster(ctx, "TestAddDelayedEmail", 1, t)
+	addrs := upRedisCluster(context.Background(), "TestAddDelayedEmail", 1, t)
 
-	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNop(), zap.NewNop())
+	rc, err := New(context.Background(), &Config{Addrs: addrs}, monitoring.NewNop(), zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
 		name      string
-		email     *SMTPClient.EmailMessageWithTime
+		ctx       context.Context
+		email     *SMTPClient.EmailMessage
 		wantEmail []string
 		wantErr   error
 	}{
 		{
 			name: "success add",
-			email: &SMTPClient.EmailMessageWithTime{
-				Time: "2025-12-02 15:04:05",
-				Email: SMTPClient.EmailMessage{
-					To:      "daanisimov04@gmail.com",
-					Subject: "subject",
-					Message: "message",
-				},
+			ctx:  context.Background(),
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
+				Time:    &timeForSuccessAdd,
+				To:      "daanisimov04@gmail.com",
+				Subject: "subject",
+				Message: "message",
 			},
-			wantEmail: []string{"{\"Time\":\"1764687845\",\"Email\":{\"to\":\"daanisimov04@gmail.com\",\"subject\":\"subject\",\"message\":\"message\"}}"},
+			wantEmail: []string{"{\"type\":\"delayedSending\",\"time\":\"1764687845\",\"to\":\"daanisimov04@gmail.com\",\"subject\":\"subject\",\"message\":\"message\"}"},
 			wantErr:   nil,
+		},
+		{
+			name: "context canceled",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
+				Time:    &timeForSuccessAdd,
+				To:      "daanisimov04@gmail.com",
+				Subject: "subject",
+				Message: "message",
+			},
+			wantEmail: nil,
+			wantErr:   context.Canceled,
+		},
+		{
+			name: "context deadline exceeded",
+			ctx: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				time.Sleep(2 * time.Nanosecond)
+				return ctx
+			}(),
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
+				Time:    &timeForSuccessAdd,
+				To:      "daanisimov04@gmail.com",
+				Subject: "subject",
+				Message: "message",
+			},
+			wantEmail: nil,
+			wantErr:   context.DeadlineExceeded,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := rc.AddDelayedEmail(ctx, tt.email)
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("AddDelayedEmail() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			err = rc.AddDelayedEmail(tt.ctx, tt.email)
+			require.ErrorIs(t, err, tt.wantErr)
 
-			email, err := rc.cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
-				Min: tt.email.Time,
-				Max: tt.email.Time,
+			email, err := rc.cluster.ZRangeByScore(tt.ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
+				Min: strconv.FormatInt(tt.email.Time.Unix(), 10),
+				Max: strconv.FormatInt(tt.email.Time.Unix(), 10),
 			}).Result()
-			require.NoError(t, err)
+			require.ErrorIs(t, err, tt.wantErr)
 
 			assert.Equal(t, tt.wantEmail, email)
 		})
@@ -72,105 +106,109 @@ func TestAddDelayedEmail(t *testing.T) {
 
 }
 
-func TestAddDelayedEmailTimeout(t *testing.T) {
-	ctx := context.Background()
-	db, rdsMock := redismock.NewClusterMock()
-
-	rc := RedisCluster{
-		cluster: db,
-		logger:  zap.NewNop(),
-		metrics: monitoring.NewNop(),
-	}
-
-	email := &SMTPClient.EmailMessageWithTime{
-		Time: "2026-01-01 01:01:01",
-		Email: SMTPClient.EmailMessage{
-			To:      "daanisimov04@gmail.com",
-			Subject: "test",
-			Message: "message",
-		},
-	}
-
-	parseEmail := `{"Time":"1767229261","Email":{"to":"daanisimov04@gmail.com","subject":"test","message":"message"}}`
-
-	rdsMock.ExpectZAdd(api.KeyForDelayedSending, redis.Z{
-		Score:  float64(1767229261),
-		Member: []byte(parseEmail),
-	}).SetErr(context.DeadlineExceeded)
-
-	err := rc.AddDelayedEmail(ctx, email)
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-}
-
 func TestCheckRedis(t *testing.T) {
-	ctx := context.Background()
+	addrs := upRedisCluster(context.Background(), "TestCheckRedis", 2, t)
 
-	addrs := upRedisCluster(ctx, "TestCheckRedis", 2, t)
-
-	rc, err := New(ctx, &Config{Addrs: addrs}, monitoring.NewNop(), zap.NewNop())
+	rc, err := New(context.Background(), &Config{Addrs: addrs}, monitoring.NewNop(), zap.NewNop())
 	require.NoError(t, err)
 
 	tests := []struct {
 		name    string
+		ctx     context.Context
 		z       []redis.Z
 		want    []string
 		wantErr error
-		delFunc func(rc redis.ClusterClient)
+		delFunc func(ctx context.Context, rc redis.ClusterClient)
 	}{
 		{
 			name: "success check one entry",
+			ctx:  context.Background(),
 			z: []redis.Z{
 				{Score: float64(time.Now().Unix()), Member: "1"},
 			},
 			want:    []string{"1"},
 			wantErr: nil,
-			delFunc: func(rc redis.ClusterClient) {
+			delFunc: func(ctx context.Context, rc redis.ClusterClient) {
 				rc.ZRem(ctx, api.KeyForDelayedSending, "1")
 			},
 		},
 		{
 			name: "success check two entry",
+			ctx:  context.Background(),
 			z: []redis.Z{
 				{Score: float64(time.Now().Unix()), Member: "2"},
 				{Score: float64(time.Now().Unix()), Member: "22"},
 			},
 			want:    []string{"2", "22"},
 			wantErr: nil,
-			delFunc: func(rc redis.ClusterClient) {
+			delFunc: func(ctx context.Context, rc redis.ClusterClient) {
 				rc.ZRem(ctx, api.KeyForDelayedSending, "2", "22")
 			},
 		},
 		{
 			name: "empty entry",
+			ctx:  context.Background(),
 			z: []redis.Z{
 				{Score: float64(time.Now().Unix()), Member: ""},
 			},
 			want:    []string{""},
 			wantErr: nil,
-			delFunc: func(rc redis.ClusterClient) {
+			delFunc: func(ctx context.Context, rc redis.ClusterClient) {
 				rc.ZRem(ctx, api.KeyForDelayedSending)
+			},
+		},
+		{
+			name: "context canceled",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			z: []redis.Z{
+				{Score: float64(time.Now().Unix()), Member: "1"},
+			},
+			want:    []string(nil),
+			wantErr: context.Canceled,
+			delFunc: func(ctx context.Context, rc redis.ClusterClient) {
+				rc.ZRem(ctx, api.KeyForDelayedSending, "1")
+			},
+		},
+		{
+			name: "context deadline exceeded",
+			ctx: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				time.Sleep(2 * time.Nanosecond)
+				return ctx
+			}(),
+			z: []redis.Z{
+				{Score: float64(time.Now().Unix()), Member: "1"},
+			},
+			want:    []string(nil),
+			wantErr: context.DeadlineExceeded,
+			delFunc: func(ctx context.Context, rc redis.ClusterClient) {
+				rc.ZRem(ctx, api.KeyForDelayedSending, "1")
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, tt.z...).Err()
+			err = rc.cluster.ZAdd(context.Background(), api.KeyForDelayedSending, tt.z...).Err()
 			require.NoError(t, err)
 
-			res, err := rc.CheckRedis(ctx)
+			res, err := rc.CheckRedis(tt.ctx)
 
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.want, res)
 
-			tt.delFunc(*rc.cluster)
+			tt.delFunc(context.Background(), *rc.cluster)
 		})
 	}
 
 	t.Run("check removal after reading", func(t *testing.T) {
-		err := rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
+		ctx := context.Background()
+
+		err = rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 			Score:  float64(time.Now().Unix()),
 			Member: "something",
 		}).Err()
@@ -187,31 +225,6 @@ func TestCheckRedis(t *testing.T) {
 	})
 }
 
-func TestCheckRedisTimeout(t *testing.T) {
-	ctx := context.Background()
-	db, rdsMock := redismock.NewClusterMock()
-
-	rc := RedisCluster{
-		cluster: db,
-		metrics: monitoring.NewNop(),
-		logger:  zap.NewNop(),
-	}
-
-	now := float64(time.Now().Unix())
-
-	rdsMock.ExpectZRangeByScore(api.KeyForDelayedSending, &redis.ZRangeBy{
-		Min: "-inf",
-		Max: strconv.FormatFloat(now, 'f', -1, 64),
-	}).SetErr(context.DeadlineExceeded)
-
-	res, err := rc.CheckRedis(ctx)
-
-	assert.Nil(t, res)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-
-}
-
 func TestFailedConnection(t *testing.T) {
 	ctx := context.Background()
 	cfg := &Config{
@@ -226,63 +239,83 @@ func TestFailedConnection(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to connect to redis")
 }
 
+func TestClose(t *testing.T) {
+	tests := []struct {
+		name            string
+		shutdownTimeout time.Duration
+		wantErr         error
+	}{
+		{
+			name:            "success",
+			shutdownTimeout: 3 * time.Second,
+			wantErr:         nil,
+		},
+		{
+			name:            "success",
+			shutdownTimeout: 0 * time.Second,
+			wantErr:         context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, _ := redismock.NewClusterMock()
+			rc := RedisCluster{
+				cluster:         db,
+				metrics:         monitoring.NewNop(),
+				logger:          zap.NewNop(),
+				shutdownTimeout: tt.shutdownTimeout,
+			}
+
+			err := rc.Close()
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestParseAndConvertTime(t *testing.T) {
 	rc := RedisCluster{
 		logger: zap.NewNop(),
 	}
 
+	testTime := time.Date(2035, 6, 27, 15, 4, 5, 0, time.UTC)
+
 	tests := []struct {
-		name        string
-		email       *SMTPClient.EmailMessageWithTime
-		expectedErr bool
+		name    string
+		email   *SMTPClient.EmailMessage
+		wantErr error
 	}{
 		{
 			name: "success",
-			email: &SMTPClient.EmailMessageWithTime{
-				Time: "2035-06-27 15:04:05",
-				Email: SMTPClient.EmailMessage{
-					To:      "test@gmail.com",
-					Subject: "subject",
-					Message: "message",
-				},
+			email: &SMTPClient.EmailMessage{
+				Type:    api.KeyForDelayedSending,
+				Time:    &testTime,
+				To:      "test@gmail.com",
+				Subject: "subject",
+				Message: "message",
 			},
-			expectedErr: false,
-		},
-		{
-			name: "invalid time",
-			email: &SMTPClient.EmailMessageWithTime{
-				Time: "invalid time",
-				Email: SMTPClient.EmailMessage{
-					To:      "test@gmail.com",
-					Subject: "subject",
-					Message: "message",
-				},
-			},
-			expectedErr: true,
+			wantErr: nil,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, score, err := rc.parseAndConvertTime(tt.email)
+			assert.ErrorIs(t, err, tt.wantErr)
 
-			if tt.expectedErr {
-				require.Error(t, err)
-				assert.Nil(t, res)
-				assert.Equal(t, 0.0, score)
-				assert.Contains(t, err.Error(), "parseAndConvertTime: cannot parse email.Time")
-			} else {
-				require.NoError(t, err)
+			wantScore := float64(testTime.Unix())
 
-				wantScore, err := time.ParseInLocation("2006-01-02 15:04:05", "2035-06-27 15:04:05", time.UTC)
-				require.NoError(t, err)
+			var resultStruct SMTPClient.TempEmailMessage
+			err = json.Unmarshal(res, &resultStruct)
+			require.NoError(t, err)
 
-				assert.Equal(t, float64(wantScore.Unix()), score)
+			assert.Equal(t, wantScore, score)
+			assert.Equal(t, tt.email.Type, resultStruct.Type)
+			assert.Equal(t, strconv.FormatInt(testTime.Unix(), 10), resultStruct.Time)
+			assert.Equal(t, tt.email.To, resultStruct.To)
+			assert.Equal(t, tt.email.Subject, resultStruct.Subject)
+			assert.Equal(t, tt.email.Message, resultStruct.Message)
 
-				var wantEmail SMTPClient.EmailMessageWithTime
-				err = json.Unmarshal(res, &wantEmail)
-				require.NoError(t, err)
-				assert.Equal(t, wantEmail.Email, tt.email.Email)
-			}
 		})
 	}
 }
@@ -332,8 +365,21 @@ func upRedisCluster(ctx context.Context, containerName string, num int, t *testi
 
 			_, _, err := cont.Exec(ctx, cmd)
 			require.NoError(t, err)
-		}
 
+			time.Sleep(2 * time.Second)
+
+			_, r, err := cont.Exec(ctx, []string{
+				"redis-cli", "-p", port, "cluster", "info",
+			})
+			require.NoError(t, err)
+
+			b, err := io.ReadAll(r)
+			require.NoError(t, err)
+
+			if !strings.Contains(string(b), "cluster_state:ok") {
+				t.Fatalf("Cluster not ready, output:\n%s", string(b))
+			}
+		}
 	}
 
 	return addrs
