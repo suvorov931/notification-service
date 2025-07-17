@@ -149,10 +149,3 @@ func gracefulShutdown(logger *zap.Logger, srv *http.Server,
 
 	logger.Info("application shutdown completed successfully")
 }
-
-// TODO: механизм отказоустойчивости (постоянное переподключение к редису и тд)
-// TODO: дополнить README, написать документацию
-
-// TODO: kubernetes, nginx, kafka
-// TODO: многопоточность
-// TODO: добавить третий хендлер для множественной отправки единого сообщения на разные адреса?

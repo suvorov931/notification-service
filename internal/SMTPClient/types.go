@@ -2,6 +2,7 @@ package SMTPClient
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/stretchr/testify/mock"
@@ -13,6 +14,13 @@ import (
 const (
 	DefaultMaxRetries      = 3
 	DefaultBasicRetryPause = 5 * time.Second
+)
+
+var (
+	ErrNoValidSenderAddress         = fmt.Errorf("SendEmail: no valid sender address")
+	ErrContextCanceledBeforeSending = fmt.Errorf("SendEmail: context canceled before sending")
+	ErrContextCanceledBeforeRetry   = fmt.Errorf("sendWithRetry: context canceled before sending")
+	ErrContextCanceledAfterPause    = fmt.Errorf("sendWithRetry: context canceled after pause")
 )
 
 type Config struct {
@@ -62,7 +70,5 @@ func (m *MockEmailSender) SendEmail(ctx context.Context, email EmailMessage) err
 }
 
 func (m *MockEmailSender) CreatePause(i int) time.Duration {
-	//args := m.Called(i)
-	//return args.Get(0).(time.Duration)
 	return time.Second
 }

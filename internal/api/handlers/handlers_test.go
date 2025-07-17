@@ -23,8 +23,6 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
-// TODO: тесты для калькуляторов таймаутов
-
 func TestNewSendNotificationHandler(t *testing.T) {
 	tests := []struct {
 		name                string

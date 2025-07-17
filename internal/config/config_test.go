@@ -43,6 +43,7 @@ func TestNew(t *testing.T) {
 
 	REDIS_CLUSTER_ADDRS=redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006
 	REDIS_CLUSTER_TIMEOUT=3s
+	REDIS_CLUSTER_SHUTDOWN_TIMEOUT=5s
 	REDIS_CLUSTER_PASSWORD=redisPassword
 	REDIS_CLUSTER_READ_ONLY=true
 
@@ -85,6 +86,7 @@ func TestNew(t *testing.T) {
 		"redis-node-6:7006",
 	}, cfg.Redis.Addrs)
 	assert.Equal(t, 3*time.Second, cfg.Redis.Timeout)
+	assert.Equal(t, 5*time.Second, cfg.Redis.ShutdownTimeout)
 	assert.Equal(t, "redisPassword", cfg.Redis.Password)
 	assert.Equal(t, true, cfg.Redis.ReadOnly)
 

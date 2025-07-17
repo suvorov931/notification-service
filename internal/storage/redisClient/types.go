@@ -17,17 +17,19 @@ const (
 )
 
 type Config struct {
-	Addrs    []string      `yaml:"REDIS_CLUSTER_ADDRS" env:"REDIS_CLUSTER_ADDRS"`
-	Timeout  time.Duration `yaml:"REDIS_CLUSTER_TIMEOUT" env:"REDIS_CLUSTER_TIMEOUT"`
-	Password string        `yaml:"REDIS_CLUSTER_PASSWORD" env:"REDIS_CLUSTER_PASSWORD"`
-	ReadOnly bool          `yaml:"REDIS_CLUSTER_READ_ONLY" env:"REDIS_CLUSTER_READ_ONLY"`
+	Addrs           []string      `env:"REDIS_CLUSTER_ADDRS"`
+	Timeout         time.Duration `env:"REDIS_CLUSTER_TIMEOUT"`
+	ShutdownTimeout time.Duration `env:"REDIS_CLUSTER_SHUTDOWN_TIMEOUT"`
+	Password        string        `env:"REDIS_CLUSTER_PASSWORD"`
+	ReadOnly        bool          `env:"REDIS_CLUSTER_READ_ONLY"`
 }
 
 type RedisCluster struct {
-	cluster *redis.ClusterClient
-	metrics monitoring.Monitoring
-	logger  *zap.Logger
-	timeout time.Duration
+	cluster         *redis.ClusterClient
+	metrics         monitoring.Monitoring
+	logger          *zap.Logger
+	timeout         time.Duration
+	shutdownTimeout time.Duration
 }
 
 type RedisClient interface {

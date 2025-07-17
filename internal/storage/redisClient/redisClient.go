@@ -35,10 +35,11 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}
 
 	return &RedisCluster{
-		cluster: cluster,
-		metrics: metrics,
-		logger:  logger,
-		timeout: config.Timeout,
+		cluster:         cluster,
+		metrics:         metrics,
+		logger:          logger,
+		timeout:         config.Timeout,
+		shutdownTimeout: config.ShutdownTimeout,
 	}, nil
 }
 
@@ -101,7 +102,7 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 }
 
 func (rc *RedisCluster) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), rc.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), rc.shutdownTimeout)
 	defer cancel()
 
 	start := time.Now()

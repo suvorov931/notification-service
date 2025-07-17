@@ -33,9 +33,9 @@ func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMT
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
 		s.metrics.IncCanceled("SendEmail")
-		s.logger.Error("SendEmail: context canceled before sending", zap.Error(ctx.Err()))
+		s.logger.Error(ErrContextCanceledBeforeSending.Error(), zap.Error(ctx.Err()))
 
-		return fmt.Errorf("SendEmail: context canceled before sending")
+		return ErrContextCanceledBeforeSending
 	}
 
 	start := time.Now()
@@ -47,7 +47,7 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 		s.metrics.IncError("SendEmail")
 		s.logger.Error("SendEmail: no valid sender address", zap.Error(err))
 
-		return fmt.Errorf("SendEmail: no valid sender address")
+		return ErrNoValidSenderAddress
 	}
 
 	msg.SetHeader("From", s.config.SenderEmail)
@@ -90,9 +90,9 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 	for i := 0; i < s.config.MaxRetries+1; i++ {
 		if ctx.Err() != nil {
 			s.metrics.IncCanceled("SendEmail")
-			s.logger.Error("sendWithRetry: context canceled before retry", zap.Error(ctx.Err()))
+			s.logger.Error(ErrContextCanceledBeforeRetry.Error(), zap.Error(ctx.Err()))
 
-			return fmt.Errorf("sendWithRetry: context canceled before retry")
+			return ErrContextCanceledBeforeRetry
 		}
 
 		if i > 0 {
@@ -108,13 +108,14 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 			case <-time.After(pause):
 			case <-ctx.Done():
 				s.metrics.IncCanceled("SendEmail")
-				s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
+				s.logger.Error(ErrContextCanceledAfterPause.Error(), zap.Error(ctx.Err()))
 
-				return fmt.Errorf("sendWithRetry: context canceled")
+				return ErrContextCanceledAfterPause
 			}
 		}
 
-		if err := dialer.DialAndSend(msg); err != nil {
+		err := dialer.DialAndSend(msg)
+		if err != nil {
 			lastErr = err
 			continue
 		}
