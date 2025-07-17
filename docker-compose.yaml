@@ -1,3 +1,5 @@
+# TODO: сделать поддержку переменных окружения
+
 networks:
   notification-service-net:
     driver: bridge

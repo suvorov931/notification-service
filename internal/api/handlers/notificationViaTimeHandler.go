@@ -15,7 +15,7 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
-func NewSendNotificationViaTimeHandler(rc redisClient.RedisClient, logger *zap.Logger, metrics monitoring.Monitoring) http.HandlerFunc {
+func NewSendNotificationViaTimeHandler(logger *zap.Logger, rc redisClient.RedisClient, metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		start := time.Now()

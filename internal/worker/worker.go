@@ -123,7 +123,6 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", res.Email))
 				continue
 			}
-			
 			w.logger.Info("Worker: successfully send delayed message", zap.Any("email", res.Email))
 		}
 	}
