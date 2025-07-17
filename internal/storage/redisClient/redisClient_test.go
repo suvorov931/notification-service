@@ -366,7 +366,7 @@ func upRedisCluster(ctx context.Context, containerName string, num int, t *testi
 			_, _, err := cont.Exec(ctx, cmd)
 			require.NoError(t, err)
 
-			time.Sleep(time.Second)
+			time.Sleep(2 * time.Second)
 
 			_, r, err := cont.Exec(ctx, []string{
 				"redis-cli", "-p", port, "cluster", "info",
