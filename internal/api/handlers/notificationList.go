@@ -54,7 +54,10 @@ func (nh *NotificationHandler) handleQuery(ctx context.Context, q url.Values) ([
 
 	switch by {
 	case "id":
-		intId, _ := strconv.Atoi(id)
+		intId, err := strconv.Atoi(id)
+		if err != nil {
+			return nil, ErrInvalidQuery
+		}
 
 		return nh.postgresClient.FetchById(ctx, intId)
 

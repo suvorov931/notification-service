@@ -45,7 +45,7 @@ func (nh *NotificationHandler) NewSendNotificationViaTimeHandler(metrics monitor
 		if err != nil {
 			http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 			metrics.IncError(handlerName)
-			nh.logger.Error("NewSendNotificationViaTimeHandler: Cannot put email in postgres")
+			nh.logger.Error("NewSendNotificationViaTimeHandler: Cannot put email in postgres", zap.Error(err))
 
 			return
 		}
