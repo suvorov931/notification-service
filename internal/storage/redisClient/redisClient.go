@@ -35,48 +35,37 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}
 
 	return &RedisCluster{
-		cluster: cluster,
-		metrics: metrics,
-		logger:  logger,
-		timeout: config.Timeout,
+		cluster:         cluster,
+		metrics:         metrics,
+		logger:          logger,
+		timeout:         config.Timeout,
+		shutdownTimeout: config.ShutdownTimeout,
 	}, nil
 }
 
-func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
+func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessage) error {
 	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
 
+	start := time.Now()
+
 	emailJSON, score, err := rc.parseAndConvertTime(email)
 	if err != nil {
-		rc.logger.Error(err.Error())
+		rc.metrics.IncError("AddDelayedEmail")
+		rc.logger.Error("AddDelayedEmail: cannot parse email.Time", zap.Error(err))
 		return err
 	}
-
-	start := time.Now()
 
 	err = rc.cluster.ZAdd(ctx, api.KeyForDelayedSending, redis.Z{
 		Score:  score,
 		Member: emailJSON,
 	}).Err()
-
-	duration := time.Since(start).Seconds()
-	rc.metrics.Observe("ZAdd", duration)
-
 	if err != nil {
-		switch {
-		case errors.Is(err, context.DeadlineExceeded):
-			rc.metrics.Inc("ZAdd", monitoring.StatusTimeout)
-			rc.logger.Error("AddDelayedEmail: deadline exceeded", zap.Error(err))
-			return fmt.Errorf("AddDelayedEmail: %w", context.DeadlineExceeded)
-
-		default:
-			rc.metrics.Inc("ZAdd", monitoring.StatusError)
-			rc.logger.Error("AddDelayedEmail: cannot set entry", zap.Error(err))
-			return err
-		}
+		return rc.processContextError("AddDelayedEmail", err)
 	}
 
-	rc.metrics.Inc("ZAdd", monitoring.StatusSuccess)
+	rc.metrics.Observe("AddDelayedEmail", start)
+	rc.metrics.IncSuccess("AddDelayedEmail")
 
 	return nil
 }
@@ -85,69 +74,103 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
 
-	now := float64(time.Now().Unix())
-
 	start := time.Now()
+
+	now := float64(time.Now().Unix())
 
 	res, err := rc.cluster.ZRangeByScore(ctx, api.KeyForDelayedSending, &redis.ZRangeBy{
 		Min: "-inf",
 		Max: strconv.FormatFloat(now, 'f', -1, 64),
 	}).Result()
-
-	duration := time.Since(start).Seconds()
-	rc.metrics.Observe("ZRangeByScore", duration)
-
 	if err != nil {
-		switch {
-		case errors.Is(err, context.DeadlineExceeded):
-			rc.metrics.Inc("ZRangeByScore", monitoring.StatusTimeout)
-			rc.logger.Error("CheckRedis: deadline exceeded", zap.Error(err))
-			return nil, fmt.Errorf("CheckRedis: %w", context.DeadlineExceeded)
-
-		default:
-			rc.metrics.Inc("ZRangeByScore", monitoring.StatusError)
-			rc.logger.Error("CheckRedis: cannot get entry", zap.Error(err))
-			return nil, err
-		}
+		return nil, rc.processContextError("CheckRedis", err)
 	}
-
-	rc.metrics.Inc("ZRangeByScore", monitoring.StatusSuccess)
 
 	if len(res) != 0 {
-		start = time.Now()
-
 		err = rc.cluster.ZRem(ctx, api.KeyForDelayedSending, res).Err()
 
-		duration = time.Since(start).Seconds()
-		rc.metrics.Observe("ZRem", duration)
-
 		if err != nil {
-			rc.metrics.Inc("ZRem", monitoring.StatusError)
+			rc.metrics.IncError("CheckRedis")
 			rc.logger.Warn("CheckRedis: cannot remove entry", zap.Error(err))
-		} else {
-			rc.metrics.Inc("ZRem", monitoring.StatusSuccess)
 		}
 	}
+
+	rc.metrics.Observe("CheckRedis", start)
+	rc.metrics.IncSuccess("CheckRedis")
 
 	return res, nil
 }
 
-func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessageWithTime) ([]byte, float64, error) {
-	UTCTime, err := time.ParseInLocation(emailTimeLayout, email.Time, time.UTC)
-	if err != nil {
-		rc.logger.Error("parseAndConvertTime: cannot parse email.Time", zap.Error(err))
+func (rc *RedisCluster) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), rc.shutdownTimeout)
+	defer cancel()
 
-		return nil, 0, fmt.Errorf("parseAndConvertTime: cannot parse email.Time: %s: %w", email.Time, err)
+	start := time.Now()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- rc.cluster.Close()
+	}()
+
+	select {
+	case <-ctx.Done():
+		rc.metrics.IncTimeout("Close")
+		rc.logger.Error("Close: timeout closing redis cluster")
+		return fmt.Errorf("Close: timeout closing redis cluster: %w", ctx.Err())
+
+	case err := <-done:
+		if err != nil {
+			rc.metrics.IncError("Close")
+			rc.logger.Error("Close: cannot close cluster", zap.Error(err))
+			return err
+		}
+
+		rc.metrics.Observe("Close", start)
+		rc.metrics.IncSuccess("Close")
+		return nil
+	}
+}
+
+func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessage) ([]byte, float64, error) {
+	unixTime := email.Time.Unix()
+
+	t := strconv.FormatInt(unixTime, 10)
+
+	jsonStruct := SMTPClient.TempEmailMessage{
+		Type:    email.Type,
+		Time:    t,
+		To:      email.To,
+		Subject: email.Subject,
+		Message: email.Message,
 	}
 
-	email.Time = strconv.Itoa(int(UTCTime.Unix()))
-
-	jsonEmail, err := json.Marshal(email)
+	jsonEmail, err := json.Marshal(jsonStruct)
 	if err != nil {
-		rc.logger.Error("parseAndConvertTime: failed to marshal email", zap.Error(err))
-
-		return nil, 0, err
+		rc.logger.Error("parseAndConvertEmail: failed to marshal email", zap.Error(err))
+		return nil, 0, fmt.Errorf("parseAndConvertEmail: failed to marshal email: %w", err)
 	}
 
-	return jsonEmail, float64(UTCTime.Unix()), nil
+	return jsonEmail, float64(email.Time.Unix()), nil
+}
+
+func (rc *RedisCluster) processContextError(funcName string, err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		rc.metrics.IncCanceled(funcName)
+		rc.logger.Error(fmt.Sprintf("%s: context canceled", funcName), zap.Error(err))
+
+		return fmt.Errorf("%s: context canceled: %w", funcName, err)
+
+	case errors.Is(err, context.DeadlineExceeded):
+		rc.metrics.IncTimeout(funcName)
+		rc.logger.Error(fmt.Sprintf("%s: deadline context", funcName), zap.Error(err))
+
+		return fmt.Errorf("%s: deadline context: %w", funcName, err)
+
+	default:
+		rc.metrics.IncError(funcName)
+		rc.logger.Error(funcName, zap.Error(err))
+
+		return fmt.Errorf("%s: %w", funcName, err)
+	}
 }

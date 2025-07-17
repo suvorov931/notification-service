@@ -3,7 +3,6 @@ package SMTPClient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,19 +17,12 @@ import (
 	"notification/internal/monitoring"
 )
 
-// TODO: переехать на testify
-// TODO: новые тестовые кейсы
-// TODO: обработка всех ошибок
-// TODO: добавить кастомных внятных ошибок и проверить их
-// TODO: тесты для sendWithRetry
-
 func TestSendEmail(t *testing.T) {
-	ctx := context.Background()
-
-	host, port, mailHogPort, url := upMailHog(ctx, t)
+	host, port, mailHogPort, url := upMailHog(context.Background(), t)
 
 	tests := []struct {
 		name      string
+		ctx       context.Context
 		from      string
 		wantFrom  string
 		email     *EmailMessage
@@ -38,7 +30,8 @@ func TestSendEmail(t *testing.T) {
 		wantErr   error
 	}{
 		{
-			name:     "successful send",
+			name:     "success send",
+			ctx:      context.Background(),
 			from:     "something@gmail.com",
 			wantFrom: "something@gmail.com",
 			email: &EmailMessage{
@@ -53,19 +46,78 @@ func TestSendEmail(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name:     "no valid sender address",
+			ctx:      context.Background(),
+			from:     "something",
+			wantFrom: "something@gmail.com",
+			email: &EmailMessage{
+				To:      "daanisimov04@gmail.com",
+				Subject: "hi",
+				Message: "hello from go test",
+			},
+			wantEmail: nil,
+			wantErr:   ErrNoValidSenderAddress,
+		},
+		{
+			name: "context canceled before send",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			from:     "something@gmail.com",
+			wantFrom: "something@gmail.com",
+			email: &EmailMessage{
+				To:      "daanisimov04@gmail.com",
+				Subject: "hi",
+				Message: "hello from go test",
+			},
+			wantEmail: nil,
+			wantErr:   ErrContextCanceledBeforeSending,
+		},
 	}
 
-	t.Run("smtp server unreachable", func(t *testing.T) {
-		srv := New(&Config{
-			SenderEmail:     "something@gmail.com",
-			SMTPHost:        "localhost",
-			SMTPPort:        9999,
-			SenderPassword:  "invalid",
-			MaxRetries:      2,
-			BasicRetryPause: 1,
-		}, monitoring.NewNop(), zap.NewNop())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := New(&Config{
+				SenderEmail: tt.from,
+				SMTPHost:    host,
+				SMTPPort:    port,
+			}, monitoring.NewNop(), zap.NewNop())
 
-		err := srv.SendEmail(ctx, EmailMessage{
+			err := srv.SendEmail(tt.ctx, *tt.email)
+			assert.ErrorIs(t, err, tt.wantErr)
+
+			if tt.wantEmail != nil {
+				time.Sleep(1 * time.Second)
+
+				gotFrom, gotTo, gotSubject, gotMessage := parseMailHogResponse(url, t)
+
+				assert.Equal(t, gotFrom, tt.wantFrom)
+				assert.Equal(t, gotTo, tt.wantEmail.To)
+				assert.Equal(t, gotSubject, tt.wantEmail.Subject)
+				assert.Equal(t, gotMessage, tt.wantEmail.Message)
+			}
+
+			cleanMailHog(mailHogPort, t)
+		})
+	}
+}
+
+func TestServerUnreachable(t *testing.T) {
+	srv := New(&Config{
+		SenderEmail:     "something@gmail.com",
+		SMTPHost:        "localhost",
+		SMTPPort:        9999,
+		SenderPassword:  "invalid",
+		MaxRetries:      2,
+		BasicRetryPause: 1,
+	}, monitoring.NewNop(), zap.NewNop())
+
+	t.Run("smtp server unreachable", func(t *testing.T) {
+
+		err := srv.SendEmail(context.Background(), EmailMessage{
 			To:      "daanisimov04@gmail.com",
 			Subject: "hi",
 			Message: "hello from go test",
@@ -76,32 +128,47 @@ func TestSendEmail(t *testing.T) {
 		assert.Contains(t, err.Error(), "sendWithRetry: all attempts to send message failed")
 	})
 
+}
+
+func TestCreatePause(t *testing.T) {
+	srv := New(&Config{BasicRetryPause: 3 * time.Second}, nil, nil)
+
+	tests := []struct {
+		name       string
+		i          int
+		basicPause time.Duration
+		want       time.Duration
+	}{
+		{
+			name:       "i = 1",
+			i:          1,
+			basicPause: 3 * time.Second,
+			want:       3 * time.Second,
+		},
+		{
+			name:       "i = 2",
+			i:          2,
+			basicPause: 3 * time.Second,
+			want:       6 * time.Second,
+		},
+		{
+			name:       "i = 3",
+			i:          3,
+			basicPause: 3 * time.Second,
+			want:       12 * time.Second,
+		},
+		{
+			name:       "i = 4",
+			i:          4,
+			basicPause: 3 * time.Second,
+			want:       24 * time.Second,
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := New(&Config{
-				SenderEmail: tt.from,
-				SMTPHost:    host,
-				SMTPPort:    port,
-			}, monitoring.NewNop(), zap.NewNop())
-			err := srv.SendEmail(ctx, *tt.email)
-			time.Sleep(time.Second)
-
-			if err != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("SendMessage() error = %v, wantErr = %v", err, tt.wantErr)
-				}
-				t.SkipNow()
-				return
-			}
-
-			gotFrom, gotTo, gotSubject, gotMessage := parseMailHogResponse(url, t)
-
-			assert.Equal(t, gotFrom, tt.wantFrom)
-			assert.Equal(t, gotTo, tt.wantEmail.To)
-			assert.Equal(t, gotSubject, tt.wantEmail.Subject)
-			assert.Equal(t, gotMessage, tt.wantEmail.Message)
-
-			cleanMailHog(mailHogPort, t)
+			got := srv.CreatePause(tt.i)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

@@ -15,6 +15,14 @@ import (
 )
 
 func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMTPClient {
+	if config.MaxRetries == 0 {
+		config.MaxRetries = DefaultMaxRetries
+	}
+
+	if config.BasicRetryPause == 0 {
+		config.BasicRetryPause = DefaultBasicRetryPause
+	}
+
 	return &SMTPClient{
 		config:  config,
 		metrics: metrics,
@@ -24,8 +32,10 @@ func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMT
 
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
-		s.logger.Error("SendEmail: context canceled", zap.Error(ctx.Err()))
-		return fmt.Errorf("SendEmail: context canceled")
+		s.metrics.IncCanceled("SendEmail")
+		s.logger.Error(ErrContextCanceledBeforeSending.Error(), zap.Error(ctx.Err()))
+
+		return ErrContextCanceledBeforeSending
 	}
 
 	start := time.Now()
@@ -34,9 +44,10 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 
 	_, err := mail.ParseAddress(s.config.SenderEmail)
 	if err != nil {
-		s.metrics.Inc("SendEmail", monitoring.StatusError)
+		s.metrics.IncError("SendEmail")
 		s.logger.Error("SendEmail: no valid sender address", zap.Error(err))
-		return fmt.Errorf("SendEmail: no valid sender address")
+
+		return ErrNoValidSenderAddress
 	}
 
 	msg.SetHeader("From", s.config.SenderEmail)
@@ -59,16 +70,16 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	s.logger.Info(fmt.Sprintf("SendEmail: sending email to %s", email.To))
 
 	if err = s.sendWithRetry(ctx, dialer, msg); err != nil {
-		s.metrics.Inc("SendEmail", monitoring.StatusError)
+		s.metrics.IncError("SendEmail")
 		s.logger.Error(fmt.Sprintf("SendEmail: cannot send message to %s", email.To), zap.Error(err))
+
 		return fmt.Errorf("SendEmail: cannot send message to %s, %w", email.To, err)
 	}
 
 	s.logger.Info(fmt.Sprintf("SendEmail: successfully sent message to %s", email.To))
 
-	duration := time.Since(start).Seconds()
-	s.metrics.Observe("SendEmail", duration)
-	s.metrics.Inc("SendEmail", monitoring.StatusSuccess)
+	s.metrics.Observe("SendEmail", start)
+	s.metrics.IncSuccess("SendEmail")
 
 	return nil
 }
@@ -78,29 +89,33 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 
 	for i := 0; i < s.config.MaxRetries+1; i++ {
 		if ctx.Err() != nil {
-			s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
-			s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
-			return fmt.Errorf("sendWithRetry: context canceled")
+			s.metrics.IncCanceled("SendEmail")
+			s.logger.Error(ErrContextCanceledBeforeRetry.Error(), zap.Error(ctx.Err()))
+
+			return ErrContextCanceledBeforeRetry
 		}
 
 		if i > 0 {
-			pause := time.Duration(float64(s.config.BasicRetryPause)*math.Pow(2, float64(i-1))) * time.Second
+			pause := s.CreatePause(i)
 			s.logger.Info(
 				"sendWithRetry: retrying send message",
 				zap.Int("attempt", i),
 				zap.Duration("pause", pause),
 				zap.Error(lastErr),
 			)
+
 			select {
 			case <-time.After(pause):
 			case <-ctx.Done():
-				s.metrics.Inc("SendEmail", monitoring.StatusCanceled)
-				s.logger.Error("sendWithRetry: context canceled", zap.Error(ctx.Err()))
-				return fmt.Errorf("sendWithRetry: context canceled")
+				s.metrics.IncCanceled("SendEmail")
+				s.logger.Error(ErrContextCanceledAfterPause.Error(), zap.Error(ctx.Err()))
+
+				return ErrContextCanceledAfterPause
 			}
 		}
 
-		if err := dialer.DialAndSend(msg); err != nil {
+		err := dialer.DialAndSend(msg)
+		if err != nil {
 			lastErr = err
 			continue
 		}
@@ -110,4 +125,10 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 
 	s.logger.Error("sendWithRetry: all attempts to send message failed, last error:", zap.Error(lastErr))
 	return fmt.Errorf("sendWithRetry: all attempts to send message failed, last error: %w", lastErr)
+}
+
+func (s *SMTPClient) CreatePause(i int) time.Duration {
+	pauseFloat := s.config.BasicRetryPause.Seconds() * math.Pow(2, float64(i-1))
+	pause := time.Duration(pauseFloat) * time.Second
+	return pause
 }

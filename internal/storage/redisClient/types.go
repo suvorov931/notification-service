@@ -14,38 +14,45 @@ import (
 
 const (
 	DefaultRedisTimeout = 3 * time.Second
-	emailTimeLayout     = "2006-01-02 15:04:05"
 )
 
 type Config struct {
-	Addrs    []string      `yaml:"REDIS_CLUSTER_ADDRS" env:"REDIS_CLUSTER_ADDRS"`
-	Timeout  time.Duration `yaml:"REDIS_CLUSTER_TIMEOUT" env:"REDIS_CLUSTER_TIMEOUT"`
-	Password string        `yaml:"REDIS_CLUSTER_PASSWORD" env:"REDIS_CLUSTER_PASSWORD"`
-	ReadOnly bool          `yaml:"REDIS_CLUSTER_READ_ONLY" env:"REDIS_CLUSTER_READ_ONLY"`
+	Addrs           []string      `env:"REDIS_CLUSTER_ADDRS"`
+	Timeout         time.Duration `env:"REDIS_CLUSTER_TIMEOUT"`
+	ShutdownTimeout time.Duration `env:"REDIS_CLUSTER_SHUTDOWN_TIMEOUT"`
+	Password        string        `env:"REDIS_CLUSTER_PASSWORD"`
+	ReadOnly        bool          `env:"REDIS_CLUSTER_READ_ONLY"`
 }
 
 type RedisCluster struct {
-	cluster *redis.ClusterClient
-	metrics monitoring.Monitoring
-	logger  *zap.Logger
-	timeout time.Duration
+	cluster         *redis.ClusterClient
+	metrics         monitoring.Monitoring
+	logger          *zap.Logger
+	timeout         time.Duration
+	shutdownTimeout time.Duration
 }
 
 type RedisClient interface {
-	AddDelayedEmail(context.Context, *SMTPClient.EmailMessageWithTime) error
+	AddDelayedEmail(context.Context, *SMTPClient.EmailMessage) error
 	CheckRedis(context.Context) ([]string, error)
+	Close() error
 }
 
 type MockRedisClient struct {
 	mock.Mock
 }
 
-func (mrc *MockRedisClient) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessageWithTime) error {
-	args := mrc.Called(ctx)
+func (mrc *MockRedisClient) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessage) error {
+	args := mrc.Called(ctx, email)
 	return args.Error(0)
 }
 
 func (mrc *MockRedisClient) CheckRedis(ctx context.Context) ([]string, error) {
 	args := mrc.Called(ctx)
 	return args.Get(0).([]string), args.Error(1)
+}
+
+func (mrc *MockRedisClient) Close() error {
+	args := mrc.Called()
+	return args.Error(0)
 }
