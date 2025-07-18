@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/golang-migrate/migrate"
@@ -27,7 +28,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	url := buildURL(config)
 	dsn := buildDSN(config)
 
-	pool, err := connect(ctx, dsn)
+	pool, err := connectWithRetry(ctx, dsn, maxRetriesForConnectWithRetry, basicRetryPause, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -267,21 +268,33 @@ func upMigration(url string, path string) error {
 	return nil
 }
 
-func connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+func connectWithRetry(ctx context.Context, dsn string, maxRetries int, basicRetryPause time.Duration, logger *zap.Logger) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse postgres config: %w", err)
 	}
 
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+	var lastErr error
+	for i := 1; i < maxRetries+1; i++ {
+		pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+		if err == nil {
+			err = pool.Ping(ctx)
+			if err == nil {
+				return pool, nil
+			}
+		}
+
+		lastErr = err
+		logger.Warn("Postgres connection failed", zap.Int("attempt", i), zap.Error(err))
+
+		pause := time.Duration(basicRetryPause.Seconds()*math.Pow(2, float64(i-1))) * time.Second
+
+		select {
+		case <-time.After(pause):
+		case <-ctx.Done():
+			return nil, fmt.Errorf("connectWithRetries: context cancelled: %w", ctx.Err())
+		}
 	}
 
-	err = pool.Ping(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to ping postgres: %w", err)
-	}
-
-	return pool, nil
+	return nil, fmt.Errorf("connectWithRetries: all attempts failed: %w", lastErr)
 }

@@ -1,5 +1,3 @@
-# TODO: сделать поддержку переменных окружения
-
 networks:
   notification-service-net:
     driver: bridge
@@ -52,8 +50,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-#    networks:
-#      - notification-service-net
+    networks:
+      - notification-service-net
 
   redis-node-1:
     image: redis:8.0

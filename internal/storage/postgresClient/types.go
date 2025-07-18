@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	DefaultPostgresTimeout = 3 * time.Second
+	maxRetriesForConnectWithRetry = 3
+	basicRetryPause               = 3 * time.Second
+	DefaultPostgresTimeout        = 3 * time.Second
 )
 
 type Config struct {

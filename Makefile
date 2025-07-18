@@ -30,4 +30,4 @@ start-app:
 down:
 	docker compose down
 
-all: start-redis-nods init-redis-cluster set-cluster-passwords start-monitoring start-app
+all: start-redis-nods init-redis-cluster set-cluster-passwords start-monitoring start-postgres start-app

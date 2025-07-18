@@ -15,6 +15,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app/
 
 COPY --from=build /app/notificationservice .
-COPY /config/prodConfig.env /app/config/config.env
+COPY config/prodConfig.env /app/config/config.env
+COPY database/migrations /app/database/migrations
 
 CMD ["./notificationservice"]
