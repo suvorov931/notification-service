@@ -199,6 +199,7 @@ func TestNewSendNotificationHandler(t *testing.T) {
 				mockRedisClient,
 				mockPostgresClient,
 				config.AppTimeouts{},
+				3*time.Second,
 			)
 
 			mockSender.On("SendEmail", mock.Anything, tt.email).Return(tt.senderError)
@@ -392,6 +393,7 @@ func TestNewSendNotificationViaTimeHandler(t *testing.T) {
 				mockRedisClient,
 				mockPostgresClient,
 				config.AppTimeouts{},
+				3*time.Second,
 			)
 
 			mockRedisClient.On("AddDelayedEmail", mock.Anything, &tt.email).Return(tt.redisError)
@@ -541,6 +543,7 @@ func TestNewListNotificationHandler(t *testing.T) {
 				mockRedisClient,
 				mockPostgresClient,
 				config.AppTimeouts{},
+				3*time.Second,
 			)
 
 			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.postgresError)
@@ -628,6 +631,7 @@ func TestNewListNotificationHandlerFetchById(t *testing.T) {
 				mockRedisClient,
 				mockPostgresClient,
 				config.AppTimeouts{},
+				3*time.Second,
 			)
 
 			mockPostgresClient.On("FetchById", mock.Anything, tt.id).Return(tt.wantEmail, tt.postgresError)
@@ -741,6 +745,7 @@ func TestNewListNotificationHandlerFetchByEmail(t *testing.T) {
 				mockRedisClient,
 				mockPostgresClient,
 				config.AppTimeouts{},
+				3*time.Second,
 			)
 
 			mockPostgresClient.On("FetchByEmail", mock.Anything, tt.email).Return(tt.wantEmail, tt.postgresError)
@@ -849,6 +854,7 @@ func TestNewListNotificationHandlerFetchByAll(t *testing.T) {
 				mockRedisClient,
 				mockPostgresClient,
 				config.AppTimeouts{},
+				3*time.Second,
 			)
 
 			mockPostgresClient.On("FetchByAll", mock.Anything).Return(tt.wantEmail, tt.postgresError)

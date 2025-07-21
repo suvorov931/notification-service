@@ -12,6 +12,9 @@ import (
 	"notification/internal/monitoring"
 )
 
+// NewSendNotificationHandler returns an HTTP handler that handles instant email notifications.
+// It decodes and validates the request, sends the email,
+// saves the message to PostgreSQL, and writes a response on success.
 func (nh *NotificationHandler) NewSendNotificationHandler(metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), nh.calculateTimeoutForSend())

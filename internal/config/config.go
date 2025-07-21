@@ -13,6 +13,8 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
+// Config defines configuration parameters for the notification-service application,
+// including HTTP server setting, SMTP/PostreSQL/Redis credentials, logger optional and calculate timeouts.
 type Config struct {
 	HttpServer  api.HttpServer
 	SMTP        SMTPClient.Config
@@ -22,6 +24,8 @@ type Config struct {
 	AppTimeouts AppTimeouts
 }
 
+// AppTimeouts defines timeouts used across the application,
+// derived from external service configurations (SMTP, Redis, Postgres).
 type AppTimeouts struct {
 	SMTPPauseForRetries   time.Duration
 	SMTPQuantityOfRetries int
@@ -29,6 +33,8 @@ type AppTimeouts struct {
 	PostgresTimeout       time.Duration
 }
 
+// New loads the configuration from the specified file path and initializes computed timeout values.
+// Returns a fully filled Config instance or an error if loading fails.
 func New(path string) (*Config, error) {
 	var cfg Config
 
@@ -41,6 +47,8 @@ func New(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// setAppTimeouts calculates effective timeout settings based on the provided raw configuration.
+// It applies default values when specific parameters are missing.
 func setAppTimeouts(cfg *Config) AppTimeouts {
 	c := AppTimeouts{}
 

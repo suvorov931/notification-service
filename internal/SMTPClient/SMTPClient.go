@@ -14,6 +14,8 @@ import (
 	"notification/internal/monitoring"
 )
 
+// New creates and returns a new SMTPClient instance.
+// If MaxRetries and BasicRetryPause are not set in the configuration, the default values are applied.
 func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMTPClient {
 	if config.MaxRetries == 0 {
 		config.MaxRetries = DefaultMaxRetries
@@ -30,6 +32,8 @@ func New(config *Config, metrics monitoring.Monitoring, logger *zap.Logger) *SMT
 	}
 }
 
+// SendEmail sends the provided email using a Simple Mail Transfer Protocol (SMTP).
+// If sending false, it reties using exponential backoff.
 func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	if ctx.Err() != nil {
 		s.metrics.IncCanceled("SendEmail")
@@ -84,6 +88,7 @@ func (s *SMTPClient) SendEmail(ctx context.Context, email EmailMessage) error {
 	return nil
 }
 
+// sendWithRetry attempts to send the email using the provided dialer with exponential backoff retries.
 func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, msg *gomail.Message) error {
 	var lastErr error
 
@@ -127,8 +132,11 @@ func (s *SMTPClient) sendWithRetry(ctx context.Context, dialer *gomail.Dialer, m
 	return fmt.Errorf("sendWithRetry: all attempts to send message failed, last error: %w", lastErr)
 }
 
+// CreatePause calculates the delay before the next retry attempt using the formula:
+// basePause * 2^(retryAttempt - 1), implementing exponential backoff.
 func (s *SMTPClient) CreatePause(i int) time.Duration {
 	pauseFloat := s.config.BasicRetryPause.Seconds() * math.Pow(2, float64(i-1))
 	pause := time.Duration(pauseFloat) * time.Second
+
 	return pause
 }

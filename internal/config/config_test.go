@@ -32,6 +32,7 @@ func TestNew(t *testing.T) {
 	HTTP_HOST=localhost
 	HTTP_PORT=8080
 	HTTP_MONITORING_PORT=2112
+	HTTP_TIMEOUT_EXTRA=3s
 
 	SENDER_EMAIL=something@mail.ru
 	SENDER_PASSWORD=somethingPassword
@@ -68,6 +69,7 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, "localhost", cfg.HttpServer.Host)
 	assert.Equal(t, "8080", cfg.HttpServer.Port)
 	assert.Equal(t, "2112", cfg.HttpServer.MonitoringPort)
+	assert.Equal(t, 3*time.Second, cfg.HttpServer.TimeoutExtra)
 
 	assert.Equal(t, "something@mail.ru", cfg.SMTP.SenderEmail)
 	assert.Equal(t, "somethingPassword", cfg.SMTP.SenderPassword)

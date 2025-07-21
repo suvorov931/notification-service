@@ -16,8 +16,12 @@ import (
 	"notification/internal/monitoring"
 )
 
+// ErrInvalidQuery indicates that the query parameters are invalid.
 var ErrInvalidQuery = errors.New("invalid query")
 
+// NewListNotificationHandler returns an HTTP handler that lists saved email notifications.
+// It selects the appropriate listing method based on query parameters,
+// fetches data from PostgreSQL, and writes the result to the HTTP response on success.
 func (nh *NotificationHandler) NewListNotificationHandler(metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), nh.calculateTimeoutForList())
@@ -46,6 +50,8 @@ func (nh *NotificationHandler) NewListNotificationHandler(metrics monitoring.Mon
 	}
 }
 
+// handleQuery selects and executes the appropriate method to list saved notifications,
+// based on the given query parameters.
 func (nh *NotificationHandler) handleQuery(ctx context.Context, q url.Values) ([]*SMTPClient.EmailMessage, error) {
 	by := q.Get("by")
 
@@ -72,6 +78,8 @@ func (nh *NotificationHandler) handleQuery(ctx context.Context, q url.Values) ([
 	}
 }
 
+// writeResponse sets the Content-Type header to application/json,
+// and writes the provided message as JSON to the HTTP client.
 func (nh *NotificationHandler) writeResponse(w http.ResponseWriter, metrics monitoring.Monitoring, handlerName string, emails []*SMTPClient.EmailMessage) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(emails); err != nil {
@@ -82,6 +90,7 @@ func (nh *NotificationHandler) writeResponse(w http.ResponseWriter, metrics moni
 	}
 }
 
+// processError handles the provided error and writes the appropriate HTTP response.
 func (nh *NotificationHandler) processError(ctx context.Context, err error, handlerName string,
 	metrics monitoring.Monitoring, w http.ResponseWriter, r *http.Request) {
 	switch {

@@ -12,6 +12,9 @@ import (
 	"notification/internal/monitoring"
 )
 
+// NewSendNotificationViaTimeHandler returns an HTTP handler that handles delayed email notifications.
+// It decodes and validates the request, stores email to Redis,
+// saves the message to PostgreSQL, and writes a response on success.
 func (nh *NotificationHandler) NewSendNotificationViaTimeHandler(metrics monitoring.Monitoring) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), nh.calculateTimeoutForSendViaTime())

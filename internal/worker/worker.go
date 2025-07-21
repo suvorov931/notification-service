@@ -14,6 +14,7 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
+// Worker periodically polls Redis for scheduled email entries and sends them using an SMTP client.
 type Worker struct {
 	rc           redisClient.RedisClient
 	sender       SMTPClient.EmailSender
@@ -22,6 +23,7 @@ type Worker struct {
 	tickDuration time.Duration
 }
 
+// New creates and returns a new Worker instance.
 func New(rc redisClient.RedisClient, sender SMTPClient.EmailSender, tickDuration time.Duration, metrics monitoring.Monitoring, logger *zap.Logger) *Worker {
 	return &Worker{
 		rc:           rc,
@@ -32,6 +34,8 @@ func New(rc redisClient.RedisClient, sender SMTPClient.EmailSender, tickDuration
 	}
 }
 
+// Run starts the worker loop, which checks Redis at a configured interval and tries to find scheduled email entries.
+// If entries are found, they are processed and emails are sent asynchronously.
 func (w *Worker) Run(ctx context.Context) error {
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -98,6 +102,8 @@ func (w *Worker) Run(ctx context.Context) error {
 	return nil
 }
 
+// processEntries handles a batch of entries received from Redis.
+// It decodes each entry and sends the corresponding email using the SMTP client.
 func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 	for _, entry := range entries {
 		select {
@@ -112,7 +118,7 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 			if err := json.Unmarshal([]byte(entry), &email); err != nil {
 				w.metrics.IncError("Worker")
-				w.logger.Error("parseAndSendEntry: failed to unmarshal entry", zap.Error(err), zap.String("entry", entry))
+				w.logger.Error("processEntries: failed to unmarshal entry", zap.Error(err), zap.String("entry", entry))
 				continue
 			}
 
@@ -124,11 +130,11 @@ func (w *Worker) processEntries(ctx context.Context, entries []string) error {
 
 			if err := w.sender.SendEmail(ctx, res); err != nil {
 				w.metrics.IncError("Worker")
-				w.logger.Error("parseEntry: failed to send message", zap.Error(err), zap.Any("email", email))
+				w.logger.Error("processEntries: failed to send message", zap.Error(err), zap.Any("email", email))
 				continue
 			}
 
-			w.logger.Info("Worker: successfully send delayed message", zap.Any("email", email))
+			w.logger.Info("Worker: successfully sent delayed message", zap.Any("email", email))
 		}
 	}
 

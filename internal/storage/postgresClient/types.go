@@ -12,12 +12,11 @@ import (
 	"notification/internal/monitoring"
 )
 
-const (
-	maxRetriesForConnectWithRetry = 3
-	basicRetryPause               = 3 * time.Second
-	DefaultPostgresTimeout        = 3 * time.Second
-)
+// DefaultPostgresTimeout defines the default timeout for PostgreSQL operations.
+const DefaultPostgresTimeout = 3 * time.Second
 
+// Config defines the configuration parameters for the PostgresService,
+// including credentials and timeout configuration.
 type Config struct {
 	Host     string        `env:"POSTGRES_HOST"`
 	Port     string        `env:"POSTGRES_PORT"`
@@ -29,6 +28,8 @@ type Config struct {
 	MinConns int           `env:"POSTGRES_MIN_CONNECTIONS"`
 }
 
+// PostgresService implements the PostgresClient interface.
+// It provides methods for storing and retrieving emails using a PostgreSQL database.
 type PostgresService struct {
 	pool    *pgxpool.Pool
 	metrics monitoring.Monitoring
@@ -36,6 +37,7 @@ type PostgresService struct {
 	timeout time.Duration
 }
 
+// PostgresClient defines an interface for storing and retrieving emails in a PostgreSQL database.
 type PostgresClient interface {
 	SaveEmail(context.Context, *SMTPClient.EmailMessage) (int, error)
 	FetchById(context.Context, int) ([]*SMTPClient.EmailMessage, error)
@@ -44,28 +46,35 @@ type PostgresClient interface {
 	Close()
 }
 
+// MockPostgresService is a mock implementation of the PostgresClient interface,
+// used for testing components that interact with the database layer.
 type MockPostgresService struct {
 	mock.Mock
 }
 
+// SaveEmail is a mock implementation.
 func (mps *MockPostgresService) SaveEmail(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
 	args := mps.Called(ctx, email)
 	return args.Get(0).(int), args.Error(1)
 }
 
+// FetchById is a mock implementation.
 func (mps *MockPostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient.EmailMessage, error) {
 	args := mps.Called(ctx, id)
 	return args.Get(0).([]*SMTPClient.EmailMessage), args.Error(1)
 }
 
+// FetchByEmail is a mock implementation.
 func (mps *MockPostgresService) FetchByEmail(ctx context.Context, email string) ([]*SMTPClient.EmailMessage, error) {
 	args := mps.Called(ctx, email)
 	return args.Get(0).([]*SMTPClient.EmailMessage), args.Error(1)
 }
 
+// FetchByAll is a mock implementation.
 func (mps *MockPostgresService) FetchByAll(ctx context.Context) ([]*SMTPClient.EmailMessage, error) {
 	args := mps.Called(ctx)
 	return args.Get(0).([]*SMTPClient.EmailMessage), args.Error(1)
 }
 
+// Close is a mock implementation.
 func (mps *MockPostgresService) Close() {}

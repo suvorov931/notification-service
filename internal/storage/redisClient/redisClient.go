@@ -16,6 +16,7 @@ import (
 	"notification/internal/monitoring"
 )
 
+// New creates and returns a new RedisCluster instance, applies default timeout if not set.
 func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, logger *zap.Logger) (*RedisCluster, error) {
 	if config.Timeout == 0 {
 		config.Timeout = DefaultRedisTimeout
@@ -43,13 +44,15 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}, nil
 }
 
+// AddDelayedEmail adds an email to a Redis sorted set,
+// using the email's UNIX timestamp as the score and the serialized email as the member.
 func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.EmailMessage) error {
 	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
 
 	start := time.Now()
 
-	emailJSON, score, err := rc.parseAndConvertTime(email)
+	emailJSON, score, err := rc.parseAndConvertData(email)
 	if err != nil {
 		rc.metrics.IncError("AddDelayedEmail")
 		rc.logger.Error("AddDelayedEmail: cannot parse email.Time", zap.Error(err))
@@ -70,6 +73,8 @@ func (rc *RedisCluster) AddDelayedEmail(ctx context.Context, email *SMTPClient.E
 	return nil
 }
 
+// CheckRedis retrieves all delayed emails whose scheduled time has passed,
+// removes them from the Z-Set, and returns them as a list of JSON strings.
 func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, rc.timeout)
 	defer cancel()
@@ -101,6 +106,7 @@ func (rc *RedisCluster) CheckRedis(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
+// Close shuts down all Redis Cluster nodes.
 func (rc *RedisCluster) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), rc.shutdownTimeout)
 	defer cancel()
@@ -131,7 +137,8 @@ func (rc *RedisCluster) Close() error {
 	}
 }
 
-func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessage) ([]byte, float64, error) {
+// parseAndConvertData serializes the email to JSON and converts its time to a UNIX timestamp score.
+func (rc *RedisCluster) parseAndConvertData(email *SMTPClient.EmailMessage) ([]byte, float64, error) {
 	unixTime := email.Time.Unix()
 
 	t := strconv.FormatInt(unixTime, 10)
@@ -153,6 +160,7 @@ func (rc *RedisCluster) parseAndConvertTime(email *SMTPClient.EmailMessage) ([]b
 	return jsonEmail, float64(email.Time.Unix()), nil
 }
 
+// processContextError handles and returns wrapped specified error.
 func (rc *RedisCluster) processContextError(funcName string, err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):

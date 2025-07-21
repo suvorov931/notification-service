@@ -16,6 +16,7 @@ import (
 	"notification/internal/api"
 )
 
+// emailTimeLayout required a time layout for checkTime function.
 const emailTimeLayout = "2006-01-02 15:04:05"
 
 var (
@@ -30,12 +31,17 @@ var (
 	errUnknownError            = errors.New("unknown error")
 )
 
+// decoder handles decoding and validation of HTTP requests.
 type decoder struct {
 	logger *zap.Logger
 	r      *http.Request
 	w      http.ResponseWriter
 }
 
+// DecodeRequest parses and validates the incoming HTTP request body.
+// It checks the headers, required fields, recipient email address, and an optional time field (if needed).
+// On success, it returns a parsed EmailMessage struct.
+// On failure, it returns the corresponding error and writes an error message to the HTTP client.
 func DecodeRequest(logger *zap.Logger, r *http.Request, w http.ResponseWriter, sendingType string) (*SMTPClient.EmailMessage, error) {
 	d := decoder{
 		logger: logger,
@@ -61,6 +67,7 @@ func DecodeRequest(logger *zap.Logger, r *http.Request, w http.ResponseWriter, s
 	return d.convert(email)
 }
 
+// checkHeaders validates the Content-Type header and ensures it is set to application/json.
 func (d *decoder) checkHeaders() error {
 	ct := d.r.Header.Get("Content-Type")
 	if ct != "application/json" {
@@ -73,6 +80,8 @@ func (d *decoder) checkHeaders() error {
 	return nil
 }
 
+// decodeBody reads and decodes the request body into a TempEmailMessage struct.
+// It returns an error if the body is empty or contains invalid JSON.
 func (d *decoder) decodeBody(email *SMTPClient.TempEmailMessage) error {
 	bodyBytes, err := io.ReadAll(d.r.Body)
 	if err != nil {
@@ -95,6 +104,8 @@ func (d *decoder) decodeBody(email *SMTPClient.TempEmailMessage) error {
 	return dec.Decode(email)
 }
 
+// errDuringParse analyzes errors that occurred during JSON decoding,
+// returns the corresponding wrapped error.
 func (d *decoder) errDuringParse(err error) error {
 	if errors.Is(err, errEmptyBody) {
 		return errEmptyBody
@@ -130,6 +141,8 @@ func (d *decoder) errDuringParse(err error) error {
 	}
 }
 
+// checkFields checks that the fields in TempEmailMessage are not empty,
+// and validates recipient email address.
 func (d *decoder) checkFields(email *SMTPClient.TempEmailMessage, sendingType string) (*SMTPClient.TempEmailMessage, error) {
 	if email.To == "" || email.Subject == "" || email.Message == "" {
 		d.logger.Error(errNotAllFields.Error())
@@ -155,6 +168,7 @@ func (d *decoder) checkFields(email *SMTPClient.TempEmailMessage, sendingType st
 	return email, nil
 }
 
+// checkTime checks the correctness of the time field and that it is in the future.
 func (d *decoder) checkTime(t string) error {
 	UTCTime, err := time.ParseInLocation(emailTimeLayout, t, time.UTC)
 	if err != nil {
@@ -174,6 +188,7 @@ func (d *decoder) checkTime(t string) error {
 	return nil
 }
 
+// convert converts data from temporary struct TempEmailMessage to EmailMessage.
 func (d *decoder) convert(email *SMTPClient.TempEmailMessage) (*SMTPClient.EmailMessage, error) {
 	res := &SMTPClient.EmailMessage{
 		Type:    email.Type,

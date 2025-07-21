@@ -11,11 +11,15 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// Config defines the logger settings, (field "output" is optional and intended for tests).
 type Config struct {
 	Env    string `yaml:"ENV" env:"LOGGER"`
-	Output io.Writer
+	output io.Writer
 }
 
+// New creates and returns a new logger instance with specified parameters.
+// In "dev" mode, it uses a comfortable console encoder for local development.
+// In prod mode (and others), it uses a JSON encoder suitable for structured logging in production.
 func New(cfg *Config) (*zap.Logger, error) {
 	switch cfg.Env {
 	case "dev":
@@ -29,11 +33,11 @@ func New(cfg *Config) (*zap.Logger, error) {
 			enc.AppendString("\033[36m" + t.Format("15:04:05") + "\033[0m")
 		}
 
-		if cfg.Output != nil {
+		if cfg.output != nil {
 			config.OutputPaths = []string{"stdout"}
 			core := zapcore.NewCore(
 				zapcore.NewConsoleEncoder(config.EncoderConfig),
-				zapcore.AddSync(cfg.Output),
+				zapcore.AddSync(cfg.output),
 				config.Level,
 			)
 
@@ -52,11 +56,11 @@ func New(cfg *Config) (*zap.Logger, error) {
 		}
 
 	case "prod":
-		if cfg.Output != nil {
+		if cfg.output != nil {
 			config := zap.NewProductionConfig()
 			core := zapcore.NewCore(
 				zapcore.NewJSONEncoder(config.EncoderConfig),
-				zapcore.AddSync(cfg.Output),
+				zapcore.AddSync(cfg.output),
 				config.Level,
 			)
 
@@ -78,6 +82,10 @@ func New(cfg *Config) (*zap.Logger, error) {
 	}
 }
 
+// MiddlewareLogger creates an HTTP middleware that logs details about incoming HTTP request.
+// In "dev" mode, it logs basic information: HTTP method, path and response status.
+// In prod mode (and others), it logs extended details such as:
+// method, path, remote address, user agent, request id, processing time and response status.
 func MiddlewareLogger(logger *zap.Logger, cfg *Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {

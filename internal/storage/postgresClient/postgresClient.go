@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/golang-migrate/migrate"
@@ -20,6 +19,8 @@ import (
 	"notification/internal/monitoring"
 )
 
+// New creates and returns a new PostgresService instance, applies default timeout if not set,
+// establishes a connection pool, and runs the migration located at migrationsPath.
 func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, logger *zap.Logger, migrationsPath string) (*PostgresService, error) {
 	if config.Timeout == 0 {
 		config.Timeout = DefaultPostgresTimeout
@@ -28,7 +29,8 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	url := buildURL(config)
 	dsn := buildDSN(config)
 
-	pool, err := connectWithRetry(ctx, dsn, maxRetriesForConnectWithRetry, basicRetryPause, logger)
+	pool, err := pgxpool.New(ctx, dsn)
+
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +48,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 	}, nil
 }
 
+// SaveEmail inserts the given email message into the database and returns its generated ID.
 func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.EmailMessage) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
@@ -74,6 +77,7 @@ func (ps *PostgresService) SaveEmail(ctx context.Context, email *SMTPClient.Emai
 	return id, nil
 }
 
+// FetchById returns a list of emails by a unique ID.
 func (ps *PostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient.EmailMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
@@ -106,6 +110,7 @@ func (ps *PostgresService) FetchById(ctx context.Context, id int) ([]*SMTPClient
 	return []*SMTPClient.EmailMessage{res}, nil
 }
 
+// FetchByEmail returns a list of emails by a recipient email address.
 func (ps *PostgresService) FetchByEmail(ctx context.Context, email string) ([]*SMTPClient.EmailMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
@@ -132,6 +137,7 @@ func (ps *PostgresService) FetchByEmail(ctx context.Context, email string) ([]*S
 	return res, nil
 }
 
+// FetchByAll returns a list of all saved entries.
 func (ps *PostgresService) FetchByAll(ctx context.Context) ([]*SMTPClient.EmailMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, ps.timeout)
 	defer cancel()
@@ -158,10 +164,12 @@ func (ps *PostgresService) FetchByAll(ctx context.Context) ([]*SMTPClient.EmailM
 	return res, nil
 }
 
+// Close closes a connections pool.
 func (ps *PostgresService) Close() {
 	ps.pool.Close()
 }
 
+// processError handles and returns wrapped specified error.
 func (ps *PostgresService) processError(funcName string, err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -189,6 +197,8 @@ func (ps *PostgresService) processError(funcName string, err error) error {
 	}
 }
 
+// processRows parses pgx.Rows and converts each row into an SMTPClient.EmailMessage.
+// Returns pgx.ErrNoRows if no records were found.
 func (ps *PostgresService) processRows(rows pgx.Rows) ([]*SMTPClient.EmailMessage, error) {
 	var emails []*SMTPClient.EmailMessage
 
@@ -228,6 +238,7 @@ func (ps *PostgresService) processRows(rows pgx.Rows) ([]*SMTPClient.EmailMessag
 	return emails, nil
 }
 
+// buildURL creates a PostgreSQL URL by specified parameters on Config, for perform migrations.
 func buildURL(config *Config) string {
 	url := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		config.User,
@@ -240,6 +251,7 @@ func buildURL(config *Config) string {
 	return url
 }
 
+// buildDSN creates a PostgreSQL DSN by specified parameters on Config, for perform pool connection.
 func buildDSN(config *Config) string {
 	dsn := fmt.Sprintf("user=%s password=%s host=%s port=%s dbname=%s pool_max_conns=%d pool_min_conns=%d",
 		config.User,
@@ -254,6 +266,7 @@ func buildDSN(config *Config) string {
 	return dsn
 }
 
+// upMigration applies database migrations using the specified file path and connection URL.
 func upMigration(url string, path string) error {
 	migration, err := migrate.New(path, url)
 	if err != nil {
@@ -266,35 +279,4 @@ func upMigration(url string, path string) error {
 	}
 
 	return nil
-}
-
-func connectWithRetry(ctx context.Context, dsn string, maxRetries int, basicRetryPause time.Duration, logger *zap.Logger) (*pgxpool.Pool, error) {
-	poolConfig, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse postgres config: %w", err)
-	}
-
-	var lastErr error
-	for i := 1; i < maxRetries+1; i++ {
-		pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-		if err == nil {
-			err = pool.Ping(ctx)
-			if err == nil {
-				return pool, nil
-			}
-		}
-
-		lastErr = err
-		logger.Warn("Postgres connection failed", zap.Int("attempt", i), zap.Error(err))
-
-		pause := time.Duration(basicRetryPause.Seconds()*math.Pow(2, float64(i-1))) * time.Second
-
-		select {
-		case <-time.After(pause):
-		case <-ctx.Done():
-			return nil, fmt.Errorf("connectWithRetries: context cancelled: %w", ctx.Err())
-		}
-	}
-
-	return nil, fmt.Errorf("connectWithRetries: all attempts failed: %w", lastErr)
 }

@@ -84,7 +84,21 @@ func main() {
 		}
 	}()
 
-	router := initRouter(logger, &config.Logger, smtpClient, redisClient, postgresClient, appMetrics, config.AppTimeouts)
+	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RealIP)
+	router.Use(llogger.MiddlewareLogger(logger, &config.Logger))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+	notificationHandler := handlers.New(logger, smtpClient, redisClient, postgresClient, config.AppTimeouts, config.HttpServer.TimeoutExtra)
+
+	router.Post("/send-notification", notificationHandler.NewSendNotificationHandler(appMetrics.SendNotificationMetrics))
+
+	router.Post("/send-notification-via-time", notificationHandler.NewSendNotificationViaTimeHandler(appMetrics.SendNotificationViaTimeMetrics))
+
+	router.Get("/list", notificationHandler.NewListNotificationHandler(appMetrics.ListNotificationMetrics))
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.Port),
@@ -101,28 +115,6 @@ func main() {
 	<-ctx.Done()
 
 	gracefulShutdown(logger, &srv, postgresClient, redisClient)
-}
-
-func initRouter(logger *zap.Logger, loggerConfig *llogger.Config, smtpClient *SMTPClient.SMTPClient, redisClient *rredisClient.RedisCluster,
-	postgresClient *ppostgresClient.PostgresService, appMetrics *monitoring.AppMetrics, timeouts cconfig.AppTimeouts) *chi.Mux {
-
-	router := chi.NewRouter()
-
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(llogger.MiddlewareLogger(logger, loggerConfig))
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.URLFormat)
-
-	notificationHandler := handlers.New(logger, smtpClient, redisClient, postgresClient, timeouts)
-
-	router.Post("/send-notification", notificationHandler.NewSendNotificationHandler(appMetrics.SendNotificationMetrics))
-
-	router.Post("/send-notification-via-time", notificationHandler.NewSendNotificationViaTimeHandler(appMetrics.SendNotificationViaTimeMetrics))
-
-	router.Get("/list", notificationHandler.NewListNotificationHandler(appMetrics.ListNotificationMetrics))
-
-	return router
 }
 
 func gracefulShutdown(logger *zap.Logger, srv *http.Server,

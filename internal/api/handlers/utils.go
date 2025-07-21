@@ -16,27 +16,32 @@ import (
 	"notification/internal/storage/redisClient"
 )
 
-const extraTimeForTimeout = 3 * time.Second
-
+// NotificationHandler handles email notification HTTP requests.
+// It manages timeout configurations used for request processing.
 type NotificationHandler struct {
 	logger         *zap.Logger
 	sender         SMTPClient.EmailSender
 	redisClient    redisClient.RedisClient
 	postgresClient postgresClient.PostgresClient
 	timeouts       config.AppTimeouts
+	extraTimeout   time.Duration
 }
 
+// New creates and returns a new NotificationHandler instance.
 func New(logger *zap.Logger, sender SMTPClient.EmailSender, redisClient redisClient.RedisClient,
-	postgresClient postgresClient.PostgresClient, timeouts config.AppTimeouts) *NotificationHandler {
+	postgresClient postgresClient.PostgresClient, timeouts config.AppTimeouts, extraTimeout time.Duration) *NotificationHandler {
 	return &NotificationHandler{
 		logger:         logger,
 		sender:         sender,
 		redisClient:    redisClient,
 		postgresClient: postgresClient,
 		timeouts:       timeouts,
+		extraTimeout:   extraTimeout,
 	}
 }
 
+// calculateTimeoutForSend calculates the total timeout for NewSendNotificationHandler,
+// including SMTP retry delays, PostgreSQL timeout, and additional buffer time.
 func (nh *NotificationHandler) calculateTimeoutForSend() time.Duration {
 	var smtpAllTimeout time.Duration
 
@@ -44,21 +49,26 @@ func (nh *NotificationHandler) calculateTimeoutForSend() time.Duration {
 		smtpAllTimeout += nh.sender.CreatePause(i)
 	}
 
-	allTimeout := smtpAllTimeout + nh.timeouts.PostgresTimeout + extraTimeForTimeout
+	allTimeout := smtpAllTimeout + nh.timeouts.PostgresTimeout + nh.extraTimeout
 
 	return allTimeout
 }
 
+// calculateTimeoutForSend calculates the total timeout for NewSendNotificationViaTimeHandler,
+// including Redis timeout, PostgreSQL timeout, and additional buffer time.
 func (nh *NotificationHandler) calculateTimeoutForSendViaTime() time.Duration {
-	allTimeout := nh.timeouts.RedisTimeout + nh.timeouts.PostgresTimeout + extraTimeForTimeout
+	allTimeout := nh.timeouts.RedisTimeout + nh.timeouts.PostgresTimeout + nh.extraTimeout
 	return allTimeout
 }
 
+// calculateTimeoutForSend calculates the total timeout for NewListNotificationHandler,
+// including PostgreSQL timeout, and additional buffer time.
 func (nh *NotificationHandler) calculateTimeoutForList() time.Duration {
-	allTimeout := nh.timeouts.PostgresTimeout + extraTimeForTimeout
+	allTimeout := nh.timeouts.PostgresTimeout + nh.extraTimeout
 	return allTimeout
 }
 
+// checkCtxError checks which one exactly context error (context canceled or deadline exceeded).
 func (nh *NotificationHandler) checkCtxError(ctx context.Context, w http.ResponseWriter,
 	metrics monitoring.Monitoring, handlerName string) bool {
 
@@ -82,11 +92,13 @@ func (nh *NotificationHandler) checkCtxError(ctx context.Context, w http.Respons
 	}
 }
 
+// respMessage is an auxiliary structure for writeResponseWithId.
 type respMessage struct {
 	Message string `json:"message"`
-	Id      int    `json:"id,omitempty"`
+	Id      int    `json:"id"`
 }
 
+// writeResponseWithId writes a JSON response for the HTTP client containing the specified id number from PostgreSQL.
 func (nh *NotificationHandler) writeResponseWithId(w http.ResponseWriter, id int, message string, metrics monitoring.Monitoring, handlerName string) {
 	resp := respMessage{
 		Message: message,

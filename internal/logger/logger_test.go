@@ -77,7 +77,7 @@ func TestMiddlewareLogger(t *testing.T) {
 			var buf bytes.Buffer
 			cfg := &Config{
 				Env:    "prod",
-				Output: &buf,
+				output: &buf,
 			}
 			logger, err := New(cfg)
 
