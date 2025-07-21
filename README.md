@@ -1,89 +1,167 @@
 # Notification Service
-Микросервис REST API написанный на Go, для отправки уведомлений по электронной почте, с логикой повторных попыток (exponential retry) и плавным завершением работы (graceful shutdown).
-Сервис разработан для командного проектного этапа, на курсе Yandex Lyceum "Веб-разработка на Go | Специализации Яндекс Лицея | Весна 24/25"
+REST API сервис, написанный на Go, для отправки мгновенных и отложенных уведомлений по электронной почте.
 
+---
 
 
 ## API Endpoints
 
-### 1. Отправка письма
+### 1. Мгновенная отправка письма
 
 **Endpoint:**  
 `POST: /send-notification`
+
+**Описание:**
+
+```text
+Осуществляет мгновенную отправку письма, используя Simple Male Transfer Protocol (SMTP), на указанный адрес электронной почты, с заданным заголовком и текстом письма.
+После успешной отправки и последующего сохранения письма в PostgreSQL, клиенту выдается уникальный ID письма.
+```
 
 **Request Body (JSON):**
 
 ```json
 {
+  "to": "youremail@gmail.com",
+  "subject": "your subject",
+  "message": "your message"
+}
+```
+
+**Response success (JSON):**
+
+```json
+{"message":"Successfully sent notification","id":1}
+```
+
+---
+
+
+### 2. Отправка отложенного письма
+
+**Endpoint:**  
+`POST: /send-notification-via-time`
+
+**Описание**
+
+```text
+Осуществляет отправку письма к заданному времени. После проверки корректности тела запроса, письмо сохраняется в PostgreSQL и выдется уникальный ID, затем письмо попадает в Redis, после фоновый Worker по заданному времени интервала проверяет базу данных и если находит письмо, время отправки которого пришло, начинает отправку письма
+```
+
+**Request Body (JSON):**
+
+```json
+{
+  "time": "2025-07-13 11:58:00",
   "to": "yourmail@gmail.com",
   "subject": "something subject",
   "message": "something message"
 }
 ```
 
-**Response (Success):**
+**Response success (JSON):**
 
-```text
-Message is correct,
-Starting to send notification
-
-Successfully sent notification
+```json
+{"message":"Successfully saved your mail","id":2}
 ```
 
 ---
 
-### 2. Отправка писем к определенному времени
 
-### В разработке
+### 3. Просмотр истории отправок
+
+**Endpoint:**  
+`GET: /list`
+
+**Описание:**
+```text
+Осуществляет выдачу клиенту отправленных и сохраненных ранее писем, используя одного из трех типов Query Parameters: по уникальному ID, по адресу элекронной почты получателя и полная выдача всех имеющихся сохраненных писем
+```
+
+**Query:**
+
+```text
+  /list?by=id&id=1
+  
+  /list?by=email&email=something@gmail.com
+  
+  /list?by=all
+```
+
+**Response success (JSON):**
+
+```json
+[{"type":"instantSending","to":"youremail@gmail.com","subject":"your subject","message":"your message"}]
+```
 
 ---
 
 ## Примеры cURL
 
-### Отправка письма
+### Отправка мгновенного письма
 
 ```bash
 curl -X POST http://localhost:8080/send-notification \                       
 -H "Content-Type: application/json" \
 -d '{
-    "to":"yourmail@gmail.com",
-    "subject":"subject",
-    "message":"message"
-}'
+  "to":"yourmail@gmail.com",
+  "subject":"subject",
+  "message":"message"
+  }'
+```
+
+### Отправка отложенного письма
+
+```bash
+curl -X POST http://localhost:8080/send-notification-via-time \                       
+-H "Content-Type: application/json" \
+-d '{
+  "time": "2025-07-13 11:58:00",
+  "to":"yourmail@gmail.com",
+  "subject":"subject",
+  "message":"message"
+  }'
+```
+
+### Выдача сохраненных писем по ID
+
+```bash
+curl -X GET http://localhost:8080/list?by=id&id=1
+```
+
+### Выдача сохраненных писем по адресу электронной почты получателя
+
+```bash
+curl -X GET http://localhost:8080/list?by=email&email=something@gmail.com
+```
+
+### Выдача всех сохраненных писем
+
+```bash
+curl -X GET http://localhost:8080/list?by=email&email=something@gmail.com
 ```
 
 ---
 
+
 ## Запуск приложения
 
 ```bash
-запуск на локальной машине:
-go run cmd/main.go 
-
-запуск в docker container:
-docker compose up --build -d
+make all
 ```
 
 ---
 
 ## Тестирование
+
 ```text
-На данном этапе были реализованы только unit тесты для кастомного json декодера,
-который присылает клиенту осмысленные ошибки в случаях ошибочного парсинга json структуры
-и integration тесты для функции отправки электронных сообщений, которые автоматически поднимают контейнер с MailHog.
+Были реализованы unit и integration тесты для абсолютно каждого пакета (покрытие тестами по пакетам более 75%)
 ```
+
+## Запуск всех тестов в проекте
+
 ```bash
-# запуск всех тестов в проекте
-# (необходимо использовать команду в корне проекта)
-go test ./... -v   
-
-# отдельный запуск тестов для json декодера 
-# (запускать из папки ./internal/notification/api/decoder)
-go test  -v  
-
-# отдельный запуск тестов для функции отправки сообщений
-# (запускать из папки ./internal/notification/SMTPClient)
-go test  -v 
+go test ./...  
 ```
 
 ---
@@ -91,20 +169,25 @@ go test  -v
 ## Используемые технологии
 
 ```text
-- chi router
 - SMTP (net/smtp)
+- Exponential Retry при ошибках отправки письма
+- Redis (Redis Cluster)
+- PostgreSQL (вместе с миграциями)
+- Фоновый Worker который с указанным интервалом ходит в Redis и ищет записи
+- chi router
 - Docker, Docker Compose
-- Graceful Shutdown Как на стороне HTTP-сервера, так и при завершении SMTP-клиента
-- Exponential Retry При ошибках отправки
+- Makefile
+- bash scripts
+- Prometheus
+- Grafana
+- GitHub Actions
+- Graceful Shutdown. Как на стороне HTTP-сервера, так и на стороне клиента
+- Работа с Context
+- Повсеместные context timeout
 - Unit-тесты
-- MailHog
 - Integration-тесты
+- MailHog
+- testcontainers-go
 ``` 
 
 ---
-
-## В планах
-```text
-- Реализация отложенной отправки писем с использованием Apache Kafka и Redis.
-- Расширение покрытия unit и integration тестами для всех ключевых компонентов.
-```
