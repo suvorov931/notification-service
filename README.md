@@ -160,7 +160,7 @@ curl -X GET http://localhost:8080/list?by=email&email=something@gmail.com
 **Выдача всех сохраненных писем**
 
 ```bash
-curl -X GET http://localhost:8080/list?by=email&email=something@gmail.com
+curl -X GET http://localhost:8080/list?by=all
 ```
 
 ---
