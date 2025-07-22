@@ -197,14 +197,14 @@ go test ./...
 - Exponential Retry при ошибках отправки письма
 - Redis (Redis Cluster)
 - PostgreSQL (вместе с миграциями)
-- Фоновый Worker который с указанным интервалом ходит в Redis и ищет записи
+- Фоновый Worker который с указанным интервалом асинхронно ходит в Redis и ищет записи
 - chi router
 - Docker, Docker Compose
 - Makefile
 - bash scripts
 - Prometheus
 - Grafana
-- GitHub Actions
+- GitHub Actions (после каждого git push запускает все тесты в проекте)
 - Graceful Shutdown. Как на стороне HTTP-сервера, так и на стороне клиента
 - Работа с Goroutine
 - Работа с Context
