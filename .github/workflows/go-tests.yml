@@ -26,10 +26,25 @@ jobs:
             ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-           ${{ runner.os }}-go-
+            ${{ runner.os }}-go-
 
       - name: Install dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test ./... -v
+      - name: Run tests and generate coverage
+        run: |
+          go test -coverprofile=coverage.out -v ./...
+          go tool cover -func=coverage.out > coverage.txt
+
+      - name: Generate coverage badge
+        uses: tj-actions/coverage-badge-go@v2
+        with:
+          coverage_file: coverage.out
+
+      - name: Deploy badge to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          publish_branch: gh-pages
+          keep_files: true

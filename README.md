@@ -1,5 +1,6 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/ladev74/notification-service/ci.yml?branch=main)](https://github.com/ladev74/notification-service/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/ladev74/notification-service?branch=main)](https://codecov.io/gh/ladev74/notification-service)
+![Coverage](https://ladev74.github.io/notification-service/coverage.svg)
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/ladev74/notification-service)](https://goreportcard.com/report/github.com/ladev74/notification-service)
 
 # Notification Service
