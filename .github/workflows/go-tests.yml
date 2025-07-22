@@ -33,7 +33,7 @@ jobs:
 
       - name: Run tests and generate coverage
         run: |
-          go test -coverprofile=coverage.out -v ./...
+          go test -covermode=atomic -coverprofile=coverage.out -v ./...
           go tool cover -func=coverage.out > coverage.txt
 
       - name: Generate coverage badge
@@ -41,10 +41,14 @@ jobs:
         with:
           coverage_file: coverage.out
 
+      - name: Move badge to public folder
+        run: |
+          mkdir -p coverage-badge
+          mv coverage.svg coverage-badge/
+
       - name: Deploy badge to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./
+          publish_dir: ./coverage-badge
           publish_branch: gh-pages
-          keep_files: true
