@@ -1,5 +1,20 @@
+[![Build Status](https://img.shields.io/github/actions/workflow/status/ladev74/notification-service/ci.yml?branch=main)](https://github.com/ladev74/notification-service/actions)
+[![Coverage](https://img.shields.io/codecov/c/github/ladev74/notification-service?branch=main)](https://codecov.io/gh/ladev74/notification-service)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ladev74/notification-service)](https://goreportcard.com/report/github.com/ladev74/notification-service)
+
 # Notification Service
 REST API сервис, написанный на Go, для отправки мгновенных и отложенных уведомлений по электронной почте.
+
+---
+
+
+## Содержание
+
+- [API Endpoints](#API-Endpoints)
+- [Примеры cURL](#Примеры-cURL)
+- [Запуск приложения](#Запуск-приложения)
+- [Тестирование](#Тестирование)
+- [Используемые технологии](#Используемые-технологии)
 
 ---
 
@@ -168,6 +183,18 @@ curl -X GET http://localhost:8080/list?by=all
 
 ## Запуск приложения
 
+```text
+Перед запуском необходимо создать и заполнить конфиг файл, примеры с пояснениями находятся в директории exampleCongig.
+По умолчанию путь до конфиг файла - ./config/config.env, но можно поменять путь в main.go,
+на тот который вам удобен (путь по умолчанию находится в начале main.go в константах)
+```
+
+```text
+Данная команда сначала, используя Docker Compose, запустит все необходимые элементы приложения,
+(все узлы Redis для инициализации, PostgreSQL, Prometheus/Grafana) в отдельных контейнерах,
+в общей сети. Затем bash script проинициализирует Redis Cluster и добавить пароль для аутентификации на каждый узел
+```
+
 ```bash
 make all
 ```
@@ -198,8 +225,10 @@ go test ./...
 - Redis (Redis Cluster)
 - PostgreSQL (вместе с миграциями)
 - Фоновый Worker который с указанным интервалом асинхронно ходит в Redis и ищет записи
+- Работа с HTTP запросами и query параметрами
 - chi router
-- Docker, Docker Compose
+- Docker (Multi-stage builds)
+- Docker Compose (healthcheck для баз данных)
 - Makefile
 - bash scripts
 - Prometheus
@@ -212,6 +241,7 @@ go test ./...
 - Документация каждого пакета (также для неэкспортируемых сущностей)
 - Unit-тесты
 - Integration-тесты
+- Тесты с использованием mock сущностей
 - MailHog
 - testcontainers-go
 ```
