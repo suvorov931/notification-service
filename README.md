@@ -206,8 +206,10 @@ go test ./...
 - Grafana
 - GitHub Actions
 - Graceful Shutdown. Как на стороне HTTP-сервера, так и на стороне клиента
+- Работа с Goroutine
 - Работа с Context
 - Повсеместные context timeout
+- Документация каждого пакета (также для неэкспортируемых сущностей)
 - Unit-тесты
 - Integration-тесты
 - MailHog
