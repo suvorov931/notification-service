@@ -1,9 +1,3 @@
-[![Build Status](https://img.shields.io/github/actions/workflow/status/ladev74/notification-service/ci.yml?branch=main)](https://github.com/ladev74/notification-service/actions)
-
-![Coverage](https://ladev74.github.io/notification-service/coverage-badge/coverage.svg)
-
-[![Go Report Card](https://goreportcard.com/badge/github.com/ladev74/notification-service)](https://goreportcard.com/report/github.com/ladev74/notification-service)
-
 # Notification Service
 REST API сервис, написанный на Go, для отправки мгновенных и отложенных уведомлений по электронной почте.
 

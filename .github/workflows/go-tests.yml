@@ -31,24 +31,5 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Run tests and generate coverage
-        run: |
-          go test -covermode=atomic -coverprofile=coverage.out -v ./...
-          go tool cover -func=coverage.out > coverage.txt
-
-      - name: Generate coverage badge
-        uses: tj-actions/coverage-badge-go@v2
-        with:
-          coverage_file: coverage.out
-
-      - name: Move badge to public folder
-        run: |
-          mkdir -p coverage-badge
-          mv coverage.svg coverage-badge/
-
-      - name: Deploy badge to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./coverage-badge
-          publish_branch: gh-pages
+      - name: Run tests
+        run: go test ./... -v
