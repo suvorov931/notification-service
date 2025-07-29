@@ -78,7 +78,7 @@ func main() {
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		monitoringAddr := fmt.Sprintf("%s:%s", config.HttpServer.Host, config.HttpServer.MonitoringPort)
-		logger.Info("metrics available at", zap.String("addr", monitoringAddr))
+		logger.Info("metrics available", zap.String("addr", monitoringAddr))
 		if err = http.ListenAndServe(monitoringAddr, nil); err != nil {
 			logger.Fatal("cannot start metrics server: %v", zap.Error(err))
 		}

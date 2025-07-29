@@ -12,6 +12,21 @@ services:
     ports:
       - "8080:8080"
       - "2112:2112"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+      redis-node-4:
+        condition: service_healthy
+      redis-node-5:
+        condition: service_healthy
+      redis-node-6:
+        condition: service_healthy
     networks:
       - notification-service-net
 
@@ -66,7 +81,7 @@ services:
     networks:
       - notification-service-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 7001 ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a $REDIS_CLUSTER_PASSWORD -p 7001 ping | grep PONG"]
       timeout: 3s
       retries: 5
 
@@ -83,7 +98,7 @@ services:
     networks:
       - notification-service-net
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -p 7002 ping | grep PONG" ]
+      test: [ "CMD-SHELL", "redis-cli -a $REDIS_CLUSTER_PASSWORD -p 7002 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
@@ -100,7 +115,7 @@ services:
     networks:
       - notification-service-net
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -p 7003 ping | grep PONG" ]
+      test: [ "CMD-SHELL", "redis-cli -a $REDIS_CLUSTER_PASSWORD -p 7003 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
@@ -117,7 +132,7 @@ services:
     networks:
       - notification-service-net
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -p 7004 ping | grep PONG" ]
+      test: [ "CMD-SHELL", "redis-cli -a $REDIS_CLUSTER_PASSWORD -p 7004 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
@@ -134,7 +149,7 @@ services:
     networks:
       - notification-service-net
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -p 7005 ping | grep PONG" ]
+      test: [ "CMD-SHELL", "redis-cli -a $REDIS_CLUSTER_PASSWORD -p 7005 ping | grep PONG" ]
       timeout: 3s
       retries: 5
 
@@ -151,6 +166,6 @@ services:
     networks:
       - notification-service-net
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -p 7006 ping | grep PONG" ]
+      test: [ "CMD-SHELL", "redis-cli -a $REDIS_CLUSTER_PASSWORD -p 7006 ping | grep PONG" ]
       timeout: 3s
       retries: 5
