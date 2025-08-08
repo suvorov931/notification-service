@@ -30,7 +30,7 @@ const (
 	pathToConfigFile     = "./config/config.env"
 	pathToMigrationsFile = "file://./database/migrations"
 	tickTimeForWorker    = 1 * time.Second
-	shoutdownTime        = 30 * time.Second
+	shutdownTime         = 30 * time.Second
 )
 
 func main() {
@@ -121,7 +121,7 @@ func gracefulShutdown(logger *zap.Logger, srv *http.Server,
 	postgresClient ppostgresClient.PostgresClient, redisClient rredisClient.RedisClient) {
 	logger.Info("received shutdown signal")
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shoutdownTime)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTime)
 	defer shutdownCancel()
 
 	logger.Info("shutting down http server")
