@@ -22,7 +22,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 		config.Timeout = DefaultRedisTimeout
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, config.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
 
 	cluster := redis.NewClusterClient(&redis.ClusterOptions{
@@ -31,7 +31,7 @@ func New(ctx context.Context, config *Config, metrics monitoring.Monitoring, log
 		ReadOnly: config.ReadOnly,
 	})
 
-	if err := cluster.Ping(pingCtx).Err(); err != nil {
+	if err := cluster.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to redis cluster: %w", err)
 	}
 
